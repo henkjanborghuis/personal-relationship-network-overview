@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Smooth drawer transition */
+.drawer-enter {
+  transform: translateX(100%);
+}
+.drawer-open {
+  transform: translateX(0);
+  transition: transform 0.25s ease-out;
+}
+
+/* Family tree connector lines */
+.family-unit-children {
+  position: relative;
+}
+.family-unit-children::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 38px;
+  right: 38px;
+  height: 2px;
+  background-color: #d1d5db;
+}

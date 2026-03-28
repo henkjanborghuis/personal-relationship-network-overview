@@ -1,0 +1,66 @@
+# enrichment.yaml — copy this file to enrichment.yaml and fill in your own values.
+#
+# Supplement data that cannot be stored in Apple Contacts.
+#
+# How to find a contact's UID:
+#   Open Apple Contacts → select a contact → Edit → scroll to the bottom.
+#   Or check /api/diagnostics/unresolved after your first sync for a list
+#   of relationships that couldn't be resolved automatically.
+
+# ─── Sync filter ─────────────────────────────────────────────────────────────
+# List only the Apple Contacts group names you want to sync.
+# Leave empty ([]) to sync ALL contacts (slow if you have many).
+sync_groups: []
+# Example:
+#   sync_groups:
+#     - Family
+#     - Close friends
+#     - Work
+
+# ─── Explicit relationships (use when auto-resolution fails) ─────────────────
+# Use when Apple Contacts' Related Names can't be auto-resolved, e.g. because
+# the name is ambiguous or the relation isn't set in Contacts at all.
+relationships: []
+# Example:
+#   - from_uid: "3B3FF4E8-D7E4-4CE3-B39D-9D55E5B2C1A4"
+#     to_uid:   "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+#     type: spouse   # spouse | child | parent | sibling
+#
+#   - from_uid: "3B3FF4E8-D7E4-4CE3-B39D-9D55E5B2C1A4"
+#     to_uid:   "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB"
+#     type: child
+
+# ─── Family declarations (fallback when Apple Contacts has no relation data) ──
+# Use when contacts have no Related Names set in Apple Contacts at all.
+# Declaring a family sets all parent→child links and marks all listed children
+# as siblings of each other. Inference then automatically propagates these
+# links further across the graph on every sync.
+families: {}
+# Example:
+#   Smith family:
+#     parents:
+#       - "UID-parent-1"
+#       - "UID-parent-2"
+#     children:
+#       - "UID-child-1"
+#       - "UID-child-2"
+#       - "UID-child-3"
+
+# ─── Group assignments (supplement to Apple Contacts groups) ─────────────────
+# Add contacts to groups without changing Apple Contacts.
+groups: {}
+# Example:
+#   My custom group:
+#     - "3B3FF4E8-D7E4-4CE3-B39D-9D55E5B2C1A4"
+#     - "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+
+# ─── Per-contact enrichment ───────────────────────────────────────────────────
+# Add interests and extra notes that aren't stored in Apple Contacts.
+contacts: {}
+# Example:
+#   "3B3FF4E8-D7E4-4CE3-B39D-9D55E5B2C1A4":
+#     interests:
+#       - cycling
+#       - photography
+#       - Italian cooking
+#     notes_extra: "Met at orientation week 2003. Prefers WhatsApp."
