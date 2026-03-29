@@ -9,11 +9,13 @@ Usage:
     python3 export.py --output ~/iCloud\ Drive/contacts-overview.html
 """
 import argparse
+import base64
 import json
 import logging
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -51,6 +53,47 @@ def build_app_data(contacts: dict, groups_data: dict) -> dict:
         "groups": groups_list,
         "groupViews": {name: view.dict() for name, view in group_views.items()},
     }
+
+
+PHOTO_THUMBNAIL_PX = 120
+
+
+def embed_photos(contacts_data: dict, photos_dir: Path) -> None:
+    """
+    Replace photo_url path strings with base64 data URLs (resized thumbnails).
+    Mutates contacts_data in place.  Uses macOS sips — no extra dependencies.
+    """
+    with_photos = [uid for uid, c in contacts_data.items() if c.get("photo_url")]
+    if not with_photos:
+        return
+
+    logger.info(f"Embedding {len(with_photos)} contact photos as thumbnails…")
+    embedded = 0
+    for uid in with_photos:
+        photo_path = photos_dir / f"{uid}.jpg"
+        if not photo_path.exists():
+            continue
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+            subprocess.run(
+                [
+                    "sips",
+                    "--resampleHeightWidthMax", str(PHOTO_THUMBNAIL_PX),
+                    str(photo_path),
+                    "--out", str(tmp_path),
+                ],
+                capture_output=True,
+                check=True,
+            )
+            b64 = base64.b64encode(tmp_path.read_bytes()).decode("ascii")
+            tmp_path.unlink(missing_ok=True)
+            contacts_data[uid]["photo_url"] = f"data:image/jpeg;base64,{b64}"
+            embedded += 1
+        except Exception as exc:
+            logger.warning(f"Could not embed photo for {uid}: {exc}")
+
+    logger.info(f"Embedded {embedded}/{len(with_photos)} photos")
 
 
 def build_frontend() -> Path:
@@ -153,6 +196,7 @@ def main():
         )
 
     app_data = build_app_data(contacts, groups_data)
+    embed_photos(app_data["contacts"], BACKEND / "data" / "photos")
 
     dist = build_frontend()
     html = inline_assets(dist, app_data)
