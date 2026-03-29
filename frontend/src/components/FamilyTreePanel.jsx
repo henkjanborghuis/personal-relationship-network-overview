@@ -3,7 +3,7 @@ import { getGroupView } from '../api'
 import FamilyTreeNode from './FamilyTreeNode'
 import InitialsCircle from './InitialsCircle'
 
-export default function FamilyTreePanel({ groupName, contacts, onSelectContact }) {
+export default function FamilyTreePanel({ groupName, contacts, onSelectContact, onReady }) {
   const [view, setView] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -12,11 +12,19 @@ export default function FamilyTreePanel({ groupName, contacts, onSelectContact }
     if (!groupName) return
     setLoading(true)
     setError(null)
+    setView(null)
     getGroupView(groupName)
       .then(setView)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
   }, [groupName])
+
+  // Notify parent once the view has rendered so it can measure and auto-fit
+  useEffect(() => {
+    if (view) {
+      requestAnimationFrame(() => onReady?.())
+    }
+  }, [view, onReady])
 
   if (!groupName) return null
 
@@ -49,18 +57,17 @@ export default function FamilyTreePanel({ groupName, contacts, onSelectContact }
   }
 
   return (
-    <div className="p-6 overflow-x-auto">
+    <div className="p-6">
       <div className="flex flex-wrap gap-10 content-start items-start">
-      {/* Family trees */}
-      {view.trees?.map((tree, i) => (
-        <FamilyTreeNode
-          key={i}
-          node={tree}
-          contacts={contacts}
-          onSelect={onSelectContact}
-        />
-      ))}
-
+        {/* Family trees */}
+        {view.trees?.map((tree, i) => (
+          <FamilyTreeNode
+            key={i}
+            node={tree}
+            contacts={contacts}
+            onSelect={onSelectContact}
+          />
+        ))}
       </div>
 
       {/* Standalone contacts (not in any family structure) */}

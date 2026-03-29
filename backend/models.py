@@ -60,3 +60,7 @@ class SyncResult(BaseModel):
     contacts_count: int
     groups_count: int
     unresolved_count: int
+
+
+class AppSettings(BaseModel):
+    default_group: Optional[str] = None

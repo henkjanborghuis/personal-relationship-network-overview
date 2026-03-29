@@ -7,6 +7,12 @@
 #   Or check /api/diagnostics/unresolved after your first sync for a list
 #   of relationships that couldn't be resolved automatically.
 
+# ─── Default group ────────────────────────────────────────────────────────────
+# The group the app opens with. Leave empty to show all contacts on startup.
+default_group: ""
+# Example:
+#   default_group: "Familie Smit"
+
 # ─── Sync filter ─────────────────────────────────────────────────────────────
 # List only the Apple Contacts group names you want to sync.
 # Leave empty ([]) to sync ALL contacts (slow if you have many).

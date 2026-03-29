@@ -79,6 +79,29 @@ Photos are NOT included in the static export (they'd make the file enormous).
 `sync.py` reads `sync_groups` from `enrichment.yaml` before running AppleScript.
 If the list is non-empty, AppleScript only iterates members of those groups — much faster than iterating all contacts. Duplicate contacts (in multiple groups) are deduplicated by UID within the AppleScript using a `seen` list.
 
+### Zoom system
+The family tree panel uses CSS `zoom` (not `transform: scale()`) on a `display: inline-block` wrapper in `App.jsx`.
+- CSS `zoom` affects layout (unlike `transform: scale()`), so `overflow: auto` on the parent scrolls correctly when zoomed in.
+- Natural content size is captured in `naturalSizeRef` via `handleReady`, which is called by `FamilyTreePanel` via `onReady` prop after data loads (using `requestAnimationFrame`).
+- `computeFit()` uses stored natural size to calculate `min(vpW/naturalW, vpH/naturalH, 1)`.
+- Auto-fit is triggered on group change: zoom resets to 1 first, then `onReady` fires after the async fetch and measures at scale 1.
+- `ZoomControls.jsx` is a floating `−` / `%` / `+` widget (bottom-right, `position: absolute`). The `%` button calls `handleFit`.
+
+### App settings
+`AppSettings` Pydantic model in `models.py` currently holds `default_group: Optional[str]`.
+`enrichment.py` exports `load_default_group(path)`.
+`/api/settings` endpoint in `main.py` returns `AppSettings`.
+`api.js` exports `getSettings()`.
+`App.jsx` fetches settings on startup alongside groups/contacts and applies `default_group` if set.
+
+### Mobile behaviour
+- Sidebar collapses by default on screens narrower than 1024px: `useState(() => window.innerWidth < 1024)`.
+- `LandscapeGuard.jsx` detects portrait orientation on mobile/tablet (width < 1024 OR height < 600) and overlays a "rotate device" message.
+- Uses `resize` + `orientationchange` events; no media query CSS is used.
+
+### Group selector
+The main content header uses a native `<select>` styled as a heading (appearance-none, bg-transparent) with a `▾` span as the visual indicator. Options are "All contacts" (value `""`) + all group names. Changing it calls `handleSelectGroup(name)` in `App.jsx`.
+
 ---
 
 ## Data flow on sync

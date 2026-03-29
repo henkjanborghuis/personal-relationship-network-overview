@@ -44,4 +44,11 @@ export async function syncContacts() {
   return res.json()
 }
 
+export async function getSettings() {
+  if (isStatic) return staticData().settings ?? {}
+  const res = await fetch('/api/settings')
+  if (!res.ok) throw new Error('Failed to fetch settings')
+  return res.json()
+}
+
 export const IS_STATIC = isStatic

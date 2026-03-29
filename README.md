@@ -8,8 +8,12 @@ A personal relationship management web app that uses **Apple Contacts** as its s
 - Multi-generational family trees (couples + children, recursively)
 - Photos synced from the Apple Photos People album
 - Click-through detail panel (birthday, anniversary, family links, interests, notes)
+- Zoom in/out on the family tree view (auto-fits to screen on open)
+- Group selector dropdown in the main header — no need to use the sidebar
+- Configurable default group (app opens directly in your most-used group)
+- Landscape-mode enforcement on mobile with a "rotate device" overlay
 - Dark mode (follows system preference, with manual toggle)
-- Collapsible sidebar
+- Collapsible sidebar (collapsed by default on mobile/tablet)
 - Accessible on your home network from any device
 - Static HTML export for offline / on-the-go use (e.g. iCloud Drive)
 
@@ -115,6 +119,16 @@ All configuration lives in **`backend/data/enrichment.yaml`**.
 
 > **Note:** `enrichment.yaml` is listed in `.gitignore` because it contains personal data (group names, contact UIDs, notes). A clean template is provided at `backend/data/enrichment.yaml.sample`. Copy it to `enrichment.yaml` to get started — it will never be committed to git.
 
+### `default_group` — which group to open on startup
+
+```yaml
+default_group: "Familie Smit"
+```
+
+The app opens directly in this group instead of the "All contacts" view. Leave empty (or omit) to start with all contacts.
+
+---
+
 ### `sync_groups` — which groups to sync
 
 ```yaml
@@ -211,6 +225,7 @@ The backend exposes a small REST API (useful for debugging):
 | `GET /api/groups/{name}` | Family tree view for a group |
 | `GET /api/contacts` | All contacts (sorted by name) |
 | `GET /api/contacts/{uid}` | Single contact by UID |
+| `GET /api/settings` | App settings (e.g. `default_group`) |
 | `GET /api/diagnostics/unresolved` | Relationships that couldn't be auto-resolved |
 | `GET /api/docs` | Interactive API docs (Swagger UI) |
 
@@ -246,6 +261,8 @@ The backend exposes a small REST API (useful for debugging):
     │       ├── FamilyTreePanel.jsx
     │       ├── FamilyTreeNode.jsx
     │       ├── ContactDrawer.jsx
-    │       └── InitialsCircle.jsx
+    │       ├── InitialsCircle.jsx
+    │       ├── ZoomControls.jsx
+    │       └── LandscapeGuard.jsx
     └── dist/               # built frontend (auto-generated)
 ```

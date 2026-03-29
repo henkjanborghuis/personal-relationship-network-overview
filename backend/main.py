@@ -9,9 +9,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from enrichment import apply_enrichment
+from enrichment import apply_enrichment, load_default_group
 from grouper import build_group_view, build_all_group_views
-from models import Contact, GroupSummary, GroupView, SyncResult, UnresolvedRelation
+from models import AppSettings, Contact, GroupSummary, GroupView, SyncResult, UnresolvedRelation
 from parser import parse_contacts
 from sync import sync_all
 
@@ -111,6 +111,12 @@ def get_contact(uid: str) -> Contact:
     if uid not in _contacts:
         raise HTTPException(status_code=404, detail="Contact not found")
     return _contacts[uid]
+
+
+@app.get("/api/settings", response_model=AppSettings)
+def get_settings() -> AppSettings:
+    """Returns app settings (e.g. default_group) from enrichment.yaml."""
+    return AppSettings(default_group=load_default_group(ENRICHMENT_FILE))
 
 
 @app.get("/api/diagnostics/unresolved", response_model=list[UnresolvedRelation])
