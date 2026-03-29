@@ -17,6 +17,12 @@ from parser import infer_relationships
 logger = logging.getLogger(__name__)
 
 
+def load_default_group(enrichment_path: Path) -> str | None:
+    """Return the configured default_group, or None."""
+    data = load_enrichment(enrichment_path)
+    return data.get("default_group") or None
+
+
 def load_enrichment(path: Path) -> dict:
     if not path.exists():
         return {}
