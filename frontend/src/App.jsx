@@ -62,6 +62,20 @@ export default function App() {
     setZoom(computeFit())
   }, [computeFit])
 
+  // Ctrl+scroll to zoom
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el) return
+    const handleWheel = (e) => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP
+      setZoom(z => +(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z + delta))).toFixed(2))
+    }
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [loading]) // re-run after loading completes so viewportRef.current is set
+
   // Reset zoom when group changes so handleReady measures at scale 1
   useEffect(() => {
     setZoom(1)
