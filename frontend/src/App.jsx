@@ -33,6 +33,11 @@ export default function App() {
   const contentRef = useRef(null)    // the CSS-zoom wrapper around FamilyTreePanel
   const naturalSizeRef = useRef({ w: 0, h: 0 })
 
+  // Refs for space+drag panning
+  const scrollRef = useRef(null)     // the overflow-auto scroll container
+  const spaceDown = useRef(false)
+  const drag = useRef(null)
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark)
   }, [isDark])
@@ -61,6 +66,71 @@ export default function App() {
   const handleFit = useCallback(() => {
     setZoom(computeFit())
   }, [computeFit])
+
+  // Ctrl+scroll to zoom
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el) return
+    const handleWheel = (e) => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP
+      setZoom(z => +(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z + delta))).toFixed(2))
+    }
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [loading]) // re-run after loading completes so viewportRef.current is set
+
+  // Space+drag to pan
+  useEffect(() => {
+    if (loading) return
+    const scrollEl = scrollRef.current
+    if (!scrollEl) return
+
+    const onKeyDown = (e) => {
+      if (e.code !== 'Space' || e.target !== document.body) return
+      e.preventDefault()
+      if (spaceDown.current) return
+      spaceDown.current = true
+      scrollEl.style.cursor = 'grab'
+    }
+    const onKeyUp = (e) => {
+      if (e.code !== 'Space') return
+      spaceDown.current = false
+      drag.current = null
+      scrollEl.style.cursor = ''
+    }
+    const onMouseDown = (e) => {
+      if (!spaceDown.current) return
+      e.preventDefault()
+      drag.current = { startX: e.clientX, startY: e.clientY,
+                       scrollLeft: scrollEl.scrollLeft, scrollTop: scrollEl.scrollTop }
+      scrollEl.style.cursor = 'grabbing'
+    }
+    const onMouseMove = (e) => {
+      if (!drag.current) return
+      scrollEl.scrollLeft = drag.current.scrollLeft - (e.clientX - drag.current.startX)
+      scrollEl.scrollTop  = drag.current.scrollTop  - (e.clientY - drag.current.startY)
+    }
+    const onMouseUp = () => {
+      if (!drag.current) return
+      drag.current = null
+      scrollEl.style.cursor = spaceDown.current ? 'grab' : ''
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    scrollEl.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      scrollEl.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [loading])
 
   // Reset zoom when group changes so handleReady measures at scale 1
   useEffect(() => {
@@ -171,7 +241,7 @@ export default function App() {
             {selectedGroup ? (
               <>
                 {/* Scaled family tree content */}
-                <div className="absolute inset-0 overflow-auto p-6">
+                <div ref={scrollRef} className="absolute inset-0 overflow-auto p-6">
                   <div
                     ref={contentRef}
                     style={{ zoom, display: 'inline-block', minWidth: 'max-content' }}
