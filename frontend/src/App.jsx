@@ -88,7 +88,8 @@ export default function App() {
     if (!scrollEl) return
 
     const onKeyDown = (e) => {
-      if (e.code !== 'Space' || e.target !== document.body) return
+      const FORM_TAGS = new Set(['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'])
+      if (e.code !== 'Space' || FORM_TAGS.has(e.target.tagName)) return
       e.preventDefault()
       if (spaceDown.current) return
       spaceDown.current = true
@@ -218,8 +219,10 @@ export default function App() {
           <div className="shrink-0 px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800">
             <div className="relative inline-flex items-center gap-1">
               <select
+                id="group-selector"
+                name="group"
                 value={selectedGroup ?? ''}
-                onChange={e => handleSelectGroup(e.target.value || null)}
+                onChange={e => { handleSelectGroup(e.target.value || null); e.target.blur(); }}
                 className="text-xl font-semibold text-gray-800 dark:text-gray-100 bg-transparent border-none outline-none cursor-pointer appearance-none pr-5 max-w-xs"
               >
                 <option value="">All contacts</option>

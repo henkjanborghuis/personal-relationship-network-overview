@@ -27,11 +27,13 @@ FRONTEND = ROOT / "frontend"
 OUTPUT_DEFAULT = ROOT / "output" / "contacts-overview.html"
 
 
-def build_app_data(contacts: dict, groups_data: dict) -> dict:
+def build_app_data(contacts: dict, groups_data: dict, enrichment_path: Path) -> dict:
     """Build the full data payload that will be embedded in the HTML."""
     from grouper import build_all_group_views
+    from enrichment import load_default_group
 
     group_views = build_all_group_views(contacts)
+    default_group = load_default_group(enrichment_path)
 
     all_group_names: set[str] = set()
     for c in contacts.values():
@@ -52,6 +54,7 @@ def build_app_data(contacts: dict, groups_data: dict) -> dict:
         "contacts": {uid: c.dict() for uid, c in contacts.items()},
         "groups": groups_list,
         "groupViews": {name: view.dict() for name, view in group_views.items()},
+        "settings": {"default_group": default_group},
     }
 
 
@@ -119,6 +122,15 @@ def inline_assets(dist: Path, app_data: dict) -> str:
     """
     html = (dist / "index.html").read_text(encoding="utf-8")
 
+    # Inline favicon as base64 data URL so file:// opens don't 404
+    favicon_path = dist / "favicon.svg"
+    if favicon_path.exists():
+        b64 = base64.b64encode(favicon_path.read_bytes()).decode("ascii")
+        html = html.replace(
+            'href="/favicon.svg"',
+            f'href="data:image/svg+xml;base64,{b64}"',
+        )
+
     # Inline CSS <link rel="stylesheet" href="...">
     def replace_link(m):
         href = m.group(1).lstrip("/")
@@ -134,13 +146,17 @@ def inline_assets(dist: Path, app_data: dict) -> str:
         html,
     )
 
-    # Inline <script type="module" ... src="...">
+    # Collect JS from <script src="..."> tags and remove them from <head>.
+    # We inject them before </body> instead so the DOM is ready when they run.
+    # (Plain <script> tags are not deferred like type="module" scripts are.)
+    collected_scripts: list[str] = []
+
     def replace_script(m):
         src = m.group(1).lstrip("/")
         js_path = dist / src
         if js_path.exists():
-            js = js_path.read_text(encoding="utf-8")
-            return f"<script type=\"module\">{js}</script>"
+            collected_scripts.append(js_path.read_text(encoding="utf-8"))
+            return ""  # remove from <head>
         return m.group(0)
 
     html = re.sub(
@@ -153,6 +169,10 @@ def inline_assets(dist: Path, app_data: dict) -> str:
     data_json = json.dumps(app_data, ensure_ascii=False, default=str)
     data_script = f"<script>window.__APP_DATA__={data_json};</script>"
     html = html.replace("</head>", data_script + "\n</head>", 1)
+
+    # Inject app scripts before </body> — DOM is fully parsed at this point
+    for js in collected_scripts:
+        html = html.replace("</body>", f"<script>{js}</script>\n</body>", 1)
 
     return html
 
@@ -195,7 +215,7 @@ def main():
             "Run the local server and visit /api/diagnostics/unresolved for details."
         )
 
-    app_data = build_app_data(contacts, groups_data)
+    app_data = build_app_data(contacts, groups_data, BACKEND / "data" / "enrichment.yaml")
     embed_photos(app_data["contacts"], BACKEND / "data" / "photos")
 
     dist = build_frontend()
