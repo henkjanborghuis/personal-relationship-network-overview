@@ -21,6 +21,8 @@ export default defineConfig({
     // Keep asset filenames predictable for the export.py inliner
     rollupOptions: {
       output: {
+        format: 'iife',
+        name: 'FafoApp',
         entryFileNames: 'assets/main.js',
         chunkFileNames: 'assets/[name].js',
         assetFileNames: 'assets/[name].[ext]',
