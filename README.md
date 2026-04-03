@@ -11,7 +11,7 @@ A personal relationship management web app that uses **Apple Contacts** as its s
 - Zoom in/out on the family tree view (auto-fits to screen on open)
 - Group selector dropdown in the main header — no need to use the sidebar
 - Configurable default group (app opens directly in your most-used group)
-- Landscape-mode enforcement on mobile with a "rotate device" overlay
+- Egocentric focus navigator on mobile: tap any relative to re-center the view
 - Dark mode (follows system preference, with manual toggle)
 - Collapsible sidebar (collapsed by default on mobile/tablet)
 - Accessible on your home network from any device
@@ -260,6 +260,7 @@ The backend exposes a small REST API (useful for debugging):
     │       ├── GroupSidebar.jsx
     │       ├── FamilyTreePanel.jsx
     │       ├── FamilyTreeNode.jsx
+    │       ├── FamilyNavigator.jsx
     │       ├── ContactDrawer.jsx
     │       ├── InitialsCircle.jsx
     │       ├── ZoomControls.jsx
