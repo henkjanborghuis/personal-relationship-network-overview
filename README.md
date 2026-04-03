@@ -91,10 +91,15 @@ python3 sync_photos.py --apply
 # Apply using full key photo instead of face crop
 python3 sync_photos.py --apply --no-crop
 
+# Test with a single person (useful for debugging)
+python3 sync_photos.py --apply --person "Jane Doe"
+
 # Then sync in the app to pick up the updated photos
 ```
 
 By default, photos are cropped to the detected face region (using Apple Photos face data) before being applied, so contact thumbnails show a tight portrait. Pass `--no-crop` to use the full key photo instead. If `pillow` is not installed, the script falls back to the full key photo automatically.
+
+HEIC source photos are handled automatically via macOS `sips` (no extra dependencies). EXIF orientation is applied before cropping, so rotated originals come out correctly.
 
 Matching is done by full name (case-insensitive). If a name in Apple Photos doesn't exactly match the name in Apple Contacts, it won't auto-match. Rename one side to fix it.
 

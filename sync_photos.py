@@ -6,6 +6,7 @@ Usage:
     python3 sync_photos.py            # dry run: show matches only
     python3 sync_photos.py --apply    # actually set photos in Apple Contacts
     python3 sync_photos.py --apply --no-crop  # use full key photo, skip face crop
+    python3 sync_photos.py --apply --person "Jane Doe"  # process one person only
 
 Requirements:
     pip3 install osxphotos pillow
@@ -42,6 +43,16 @@ def check_pillow():
         return Image
     except ImportError:
         return None
+
+
+def convert_heic_to_jpeg(heic_path: str, dest_dir: str) -> str | None:
+    """Convert a HEIC file to JPEG using macOS sips. Returns JPEG path or None."""
+    out_path = os.path.join(dest_dir, os.path.basename(heic_path).rsplit(".", 1)[0] + "_converted.jpg")
+    proc = subprocess.run(
+        ["sips", "-s", "format", "jpeg", heic_path, "--out", out_path],
+        capture_output=True, text=True
+    )
+    return out_path if proc.returncode == 0 and os.path.exists(out_path) else None
 
 
 def get_photos_persons(osxphotos):
@@ -101,6 +112,9 @@ def set_contact_photo_applescript(contact_id: str, photo_path: str) -> tuple[boo
     script = f'''
     tell application "Contacts"
         set thePerson to person id "{contact_id}"
+        if image of thePerson is not missing value then
+            delete image of thePerson
+        end if
         set theImage to (read POSIX file "{safe_path}" as JPEG picture)
         set image of thePerson to theImage
         save
@@ -148,7 +162,14 @@ def export_face_crop(person, dest_dir: str, Image) -> str | None:
         if not rect or len(rect) < 2:
             return None
 
-        img = Image.open(face.photo.path)
+        from PIL import ImageOps
+        photo_path = face.photo.path
+        if photo_path.lower().endswith(".heic"):
+            converted = convert_heic_to_jpeg(photo_path, dest_dir)
+            if converted is None:
+                return None
+            photo_path = converted
+        img = ImageOps.exif_transpose(Image.open(photo_path))
         w, h = img.size
 
         x1, y1 = rect[0]
@@ -184,6 +205,7 @@ def main():
     parser.add_argument("--apply", action="store_true", help="Actually set photos (default: dry run)")
     parser.add_argument("--no-crop", action="store_true", help="Use full key photo instead of face crop")
     parser.add_argument("--verbose", action="store_true", help="Show all unmatched contacts too")
+    parser.add_argument("--person", metavar="NAME", help="Only process this person (case-insensitive full name)")
     args = parser.parse_args()
 
     osxphotos = check_osxphotos()
@@ -218,6 +240,13 @@ def main():
             matched.append((photo_name, orig_name, uid, person))
         else:
             unmatched_photos.append(photo_name)
+
+    if args.person:
+        filter_key = normalize_name(args.person)
+        matched = [m for m in matched if normalize_name(m[0]) == filter_key]
+        if not matched:
+            print(f"\nNo match found for '{args.person}'. Check spelling or run without --person to see all matches.")
+            return
 
     print(f"\nMatched:   {len(matched)}")
     print(f"Unmatched: {len(unmatched_photos)} (Photos persons with no matching contact)")
