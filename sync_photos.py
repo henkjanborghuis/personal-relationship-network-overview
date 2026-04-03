@@ -5,16 +5,17 @@ sync_photos.py — Set Apple Contacts photos from Apple Photos People album.
 Usage:
     python3 sync_photos.py            # dry run: show matches only
     python3 sync_photos.py --apply    # actually set photos in Apple Contacts
+    python3 sync_photos.py --apply --no-crop  # use full key photo, skip face crop
 
 Requirements:
-    pip3 install osxphotos
+    pip3 install osxphotos pillow
 
 How it works:
     1. Reads named persons from Apple Photos' People album via osxphotos
-    2. Gets each person's key (representative) photo
+    2. Gets the best face crop for each person (falls back to key photo if unavailable)
     3. Fetches all Apple Contacts names via AppleScript
     4. Matches by name (case-insensitive, exact full name)
-    5. In --apply mode: exports key photo to temp file, sets it on the contact
+    5. In --apply mode: exports cropped photo to temp file, sets it on the contact
 """
 
 import argparse
@@ -35,18 +36,25 @@ def check_osxphotos():
         sys.exit(1)
 
 
+def check_pillow():
+    try:
+        from PIL import Image
+        return Image
+    except ImportError:
+        return None
+
+
 def get_photos_persons(osxphotos):
-    """Return list of (name, keyphoto) tuples from Photos People album."""
+    """Return list of (name, person) tuples from Photos People album."""
     db = osxphotos.PhotosDB()
     persons = []
     for person in db.person_info:
         name = person.name
         if not name or name.strip() == "":
             continue
-        keyphoto = person.keyphoto
-        if keyphoto is None:
+        if person.keyphoto is None:
             continue
-        persons.append((name.strip(), keyphoto))
+        persons.append((name.strip(), person))
     return persons
 
 
@@ -63,17 +71,16 @@ def get_contacts_via_applescript():
         return contactList
     end tell
     '''
-    result = subprocess.run(
+    proc = subprocess.run(
         ["osascript", "-e", script],
         capture_output=True, text=True, timeout=120
     )
-    if result.returncode != 0:
-        print(f"ERROR: AppleScript failed: {result.stderr.strip()}")
+    if proc.returncode != 0:
+        print(f"ERROR: AppleScript failed: {proc.stderr.strip()}")
         sys.exit(1)
 
     contacts = {}
-    # osascript returns comma-separated list
-    raw = result.stdout.strip()
+    raw = proc.stdout.strip()
     if not raw:
         return contacts
 
@@ -88,9 +95,8 @@ def get_contacts_via_applescript():
     return contacts
 
 
-def set_contact_photo_applescript(contact_id: str, photo_path: str) -> bool:
-    """Set the photo of a contact by ID using AppleScript. Returns True on success."""
-    # Escape the path for AppleScript
+def set_contact_photo_applescript(contact_id: str, photo_path: str) -> tuple[bool, str]:
+    """Set the photo of a contact by ID using AppleScript. Returns (ok, error)."""
     safe_path = photo_path.replace('"', '\\"')
     script = f'''
     tell application "Contacts"
@@ -100,11 +106,11 @@ def set_contact_photo_applescript(contact_id: str, photo_path: str) -> bool:
         save
     end tell
     '''
-    result = subprocess.run(
+    proc = subprocess.run(
         ["osascript", "-e", script],
         capture_output=True, text=True, timeout=30
     )
-    return result.returncode == 0, result.stderr.strip()
+    return proc.returncode == 0, proc.stderr.strip()
 
 
 def export_keyphoto(keyphoto, dest_dir: str) -> str | None:
@@ -118,6 +124,57 @@ def export_keyphoto(keyphoto, dest_dir: str) -> str | None:
     return None
 
 
+def export_face_crop(person, dest_dir: str, Image) -> str | None:
+    """
+    Export a face-cropped portrait for the person to dest_dir.
+    Uses the highest-quality face detection bounding box.
+    Returns path to cropped JPEG, or None if not possible.
+    """
+    if not person.face_info:
+        return None
+
+    # face_info is sorted by quality, best first; find one with a local photo
+    face = None
+    for f in person.face_info:
+        if f.photo and f.photo.path:
+            face = f
+            break
+
+    if face is None:
+        return None
+
+    try:
+        rect = face.face_rect()  # [(x, y), (x2, y2)] pixel coords, top-left origin
+        if not rect or len(rect) < 2:
+            return None
+
+        img = Image.open(face.photo.path)
+        w, h = img.size
+
+        x1, y1 = rect[0]
+        x2, y2 = rect[1]
+        face_w = x2 - x1
+        face_h = y2 - y1
+
+        # Add padding around the detected face region
+        pad_x = face_w * 0.4
+        pad_y = face_h * 0.5
+
+        cx = int(max(0, x1 - pad_x))
+        cy = int(max(0, y1 - pad_y))
+        cx2 = int(min(w, x2 + pad_x))
+        cy2 = int(min(h, y2 + pad_y))
+
+        cropped = img.crop((cx, cy, cx2, cy2))
+        out_path = os.path.join(dest_dir, f"face_{face.photo.uuid}.jpg")
+        cropped.convert("RGB").save(out_path, "JPEG", quality=90)
+        return out_path
+
+    except Exception as e:
+        print(f"  WARNING: face crop failed: {e}")
+        return None
+
+
 def normalize_name(name: str) -> str:
     return name.strip().lower()
 
@@ -125,10 +182,20 @@ def normalize_name(name: str) -> str:
 def main():
     parser = argparse.ArgumentParser(description="Sync Apple Photos person photos to Apple Contacts")
     parser.add_argument("--apply", action="store_true", help="Actually set photos (default: dry run)")
+    parser.add_argument("--no-crop", action="store_true", help="Use full key photo instead of face crop")
     parser.add_argument("--verbose", action="store_true", help="Show all unmatched contacts too")
     args = parser.parse_args()
 
     osxphotos = check_osxphotos()
+
+    use_crop = not args.no_crop
+    Image = None
+    if use_crop:
+        Image = check_pillow()
+        if Image is None:
+            print("WARNING: Pillow is not installed — falling back to full key photo.")
+            print("Install it with:  pip3 install pillow")
+            use_crop = False
 
     print("Reading Apple Photos People album…")
     persons = get_photos_persons(osxphotos)
@@ -141,15 +208,14 @@ def main():
     # Build lookup: lowercase name → (original_name, uid)
     contacts_lower = {normalize_name(k): (k, v) for k, v in contacts.items()}
 
-    # Match
     matched = []
     unmatched_photos = []
 
-    for photo_name, keyphoto in persons:
+    for photo_name, person in persons:
         key = normalize_name(photo_name)
         if key in contacts_lower:
             orig_name, uid = contacts_lower[key]
-            matched.append((photo_name, orig_name, uid, keyphoto))
+            matched.append((photo_name, orig_name, uid, person))
         else:
             unmatched_photos.append(photo_name)
 
@@ -162,7 +228,8 @@ def main():
 
     if not args.apply:
         print("\n--- DRY RUN (pass --apply to set photos) ---\n")
-        print("Would set photos for:")
+        crop_label = "face-cropped" if use_crop else "key photo"
+        print(f"Would set photos for ({crop_label}):")
         for photo_name, contact_name, uid, _ in matched:
             print(f"  {photo_name}  →  {contact_name}")
         if args.verbose and unmatched_photos:
@@ -172,22 +239,36 @@ def main():
         return
 
     # Apply mode
-    print(f"\n--- APPLYING {len(matched)} photos ---\n")
+    crop_label = "face-cropped" if use_crop else "key photo"
+    print(f"\n--- APPLYING {len(matched)} photos ({crop_label}) ---\n")
     success = 0
     failed = 0
+    cropped_count = 0
+    fallback_count = 0
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        for photo_name, contact_name, uid, keyphoto in matched:
+        for photo_name, contact_name, uid, person in matched:
             print(f"  {photo_name}…", end=" ", flush=True)
 
-            # Export photo to temp dir
-            exported_path = export_keyphoto(keyphoto, tmpdir)
+            exported_path = None
+
+            if use_crop:
+                exported_path = export_face_crop(person, tmpdir, Image)
+                if exported_path:
+                    cropped_count += 1
+                else:
+                    # Fall back to key photo
+                    exported_path = export_keyphoto(person.keyphoto, tmpdir)
+                    if exported_path:
+                        fallback_count += 1
+            else:
+                exported_path = export_keyphoto(person.keyphoto, tmpdir)
+
             if not exported_path:
                 print("SKIP (export failed)")
                 failed += 1
                 continue
 
-            # If not JPEG, we still try (osascript 'as JPEG picture' will handle conversion for common formats)
             ok, err = set_contact_photo_applescript(uid, exported_path)
             if ok:
                 print("OK")
@@ -197,6 +278,8 @@ def main():
                 failed += 1
 
     print(f"\nDone. {success} photos set, {failed} failed.")
+    if use_crop:
+        print(f"  Face-cropped: {cropped_count}, fell back to key photo: {fallback_count}")
     if failed > 0:
         print("Note: Some failures may be due to macOS privacy permissions.")
         print("Check System Settings > Privacy & Security > Contacts")

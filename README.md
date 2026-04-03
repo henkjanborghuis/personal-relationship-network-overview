@@ -79,8 +79,8 @@ Sync time depends on group size. With `sync_groups` configured it typically take
 Photos are pulled from the **People album** in Apple Photos and set on matching Apple Contacts entries.
 
 ```bash
-# Install osxphotos (one-time)
-pip3 install osxphotos
+# Install dependencies (one-time)
+pip3 install osxphotos pillow
 
 # Preview which Photos persons match which contacts (dry run)
 python3 sync_photos.py
@@ -88,8 +88,13 @@ python3 sync_photos.py
 # Apply — sets photos on matched contacts in Apple Contacts
 python3 sync_photos.py --apply
 
+# Apply using full key photo instead of face crop
+python3 sync_photos.py --apply --no-crop
+
 # Then sync in the app to pick up the updated photos
 ```
+
+By default, photos are cropped to the detected face region (using Apple Photos face data) before being applied, so contact thumbnails show a tight portrait. Pass `--no-crop` to use the full key photo instead. If `pillow` is not installed, the script falls back to the full key photo automatically.
 
 Matching is done by full name (case-insensitive). If a name in Apple Photos doesn't exactly match the name in Apple Contacts, it won't auto-match. Rename one side to fix it.
 
