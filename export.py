@@ -51,9 +51,9 @@ def build_app_data(contacts: dict, groups_data: dict, enrichment_path: Path) -> 
     )
 
     return {
-        "contacts": {uid: c.dict() for uid, c in contacts.items()},
+        "contacts": {uid: c.model_dump() for uid, c in contacts.items()},
         "groups": groups_list,
-        "groupViews": {name: view.dict() for name, view in group_views.items()},
+        "groupViews": {name: view.model_dump() for name, view in group_views.items()},
         "settings": {"default_group": default_group},
     }
 
