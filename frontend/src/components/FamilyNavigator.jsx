@@ -4,6 +4,7 @@ import InitialsCircle from './InitialsCircle'
 
 export default function FamilyNavigator({ groupName, contacts, onSelect }) {
   const [loading, setLoading] = useState(false)
+  const [groupView, setGroupView] = useState(null)
   const [focalUid, setFocalUid] = useState(null)
   const [history, setHistory] = useState([])
 
@@ -11,12 +12,18 @@ export default function FamilyNavigator({ groupName, contacts, onSelect }) {
   useEffect(() => {
     if (!groupName) return
     setLoading(true)
+    setGroupView(null)
     setFocalUid(null)
     setHistory([])
     getGroupView(groupName)
       .then(view => {
-        const first = view.trees?.[0]?.couple?.[0] ?? view.singles?.[0] ?? null
-        setFocalUid(first)
+        setGroupView(view)
+        if (view.trees.length > 1) {
+          setFocalUid(null) // null = root level mode: show all roots
+        } else {
+          const first = view.trees?.[0]?.couple?.[0] ?? view.singles?.[0] ?? null
+          setFocalUid(first)
+        }
       })
       .finally(() => setLoading(false))
   }, [groupName])
@@ -33,10 +40,52 @@ export default function FamilyNavigator({ groupName, contacts, onSelect }) {
     setHistory(h => h.slice(0, -1))
   }
 
-  if (loading || !focalUid) {
+  if (loading || !groupView) {
     return (
       <div className="flex items-center justify-center h-40 text-gray-400 dark:text-gray-500 text-sm">
         Loading…
+      </div>
+    )
+  }
+
+  // Root level mode: multiple root trees with no common ancestor — show them all
+  if (!focalUid) {
+    const rootUids = groupView.trees.flatMap(t => t.couple)
+    const childUids = [...new Set(
+      rootUids.flatMap(uid => contacts[uid]?.children_uids ?? [])
+    )]
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <div className="shrink-0 px-4 py-2 border-b border-gray-100 dark:border-gray-800 flex items-center">
+          <button
+            disabled
+            className="text-sm text-gray-300 dark:text-gray-600 font-medium"
+          >
+            ‹ Back
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <div className="flex flex-col p-4">
+            <div className="py-4">
+              <div className="text-xs font-medium text-blue-500 dark:text-blue-400 uppercase tracking-wide mb-2">
+                Viewing
+              </div>
+              <div className="flex flex-wrap gap-3 px-3 py-2.5 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 shadow-sm">
+                {rootUids.map(uid => contacts[uid] && (
+                  <InitialsCircle key={uid} contact={contacts[uid]} onSelect={navigateTo} size="md" />
+                ))}
+              </div>
+            </div>
+            {childUids.length > 0 && (
+              <NavigatorRow
+                label="Children"
+                uids={childUids}
+                contacts={contacts}
+                onTap={navigateTo}
+              />
+            )}
+          </div>
+        </div>
       </div>
     )
   }
