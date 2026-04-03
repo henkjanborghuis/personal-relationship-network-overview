@@ -141,16 +141,19 @@ def export_keyphoto(keyphoto, dest_dir: str) -> str | None:
 def export_face_crop(person, dest_dir: str, Image) -> str | None:
     """
     Export a face-cropped portrait for the person to dest_dir.
-    Uses the highest-quality face detection bounding box.
+    Uses the face detection bounding box from the key photo specifically,
+    so the result matches what you see in the Apple Photos People album.
     Returns path to cropped JPEG, or None if not possible.
     """
-    if not person.face_info:
+    if not person.face_info or person.keyphoto is None:
         return None
 
-    # face_info is sorted by quality, best first; find one with a local photo
+    # Only use a face detection from the key photo — that is the photo the
+    # user sees in the People album and expects to appear in Contacts.
+    keyphoto_uuid = person.keyphoto.uuid
     face = None
     for f in person.face_info:
-        if f.photo and f.photo.path:
+        if f.photo and f.photo.uuid == keyphoto_uuid and f.photo.path:
             face = f
             break
 
