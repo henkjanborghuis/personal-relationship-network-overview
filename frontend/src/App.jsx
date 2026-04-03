@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { getAllContacts, getContactsMap, getGroups, getSettings, syncContacts, IS_STATIC } from './api'
 import GroupSidebar from './components/GroupSidebar'
 import FamilyTreePanel from './components/FamilyTreePanel'
+import FamilyNavigator from './components/FamilyNavigator'
 import InitialsCircle from './components/InitialsCircle'
 import ContactDrawer from './components/ContactDrawer'
 import ZoomControls from './components/ZoomControls'
@@ -27,6 +28,7 @@ export default function App() {
     () => window.matchMedia('(prefers-color-scheme: dark)').matches
   )
   const [zoom, setZoom] = useState(1)
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024)
 
   // Refs for zoom measurement
   const viewportRef = useRef(null)   // the overflow-hidden clip container
@@ -41,6 +43,12 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark)
   }, [isDark])
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 1024)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
 
   // Compute fit-to-screen zoom from stored natural dimensions
   const computeFit = useCallback(() => {
@@ -242,30 +250,39 @@ export default function App() {
           {/* Content area */}
           <div ref={viewportRef} className="flex-1 overflow-hidden relative">
             {selectedGroup ? (
-              <>
-                {/* Scaled family tree content */}
-                <div ref={scrollRef} className="absolute inset-0 overflow-auto p-6">
-                  <div
-                    ref={contentRef}
-                    style={{ zoom, display: 'inline-block', minWidth: 'max-content' }}
-                  >
-                    <FamilyTreePanel
-                      groupName={selectedGroup}
-                      contacts={contacts}
-                      onSelectContact={handleSelectContact}
-                      onReady={handleReady}
-                    />
-                  </div>
-                </div>
-
-                {/* Zoom controls (floating, bottom-right) */}
-                <ZoomControls
-                  zoom={zoom}
-                  onZoomIn={() => setZoom(z => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))}
-                  onZoomOut={() => setZoom(z => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))}
-                  onFit={handleFit}
+              isMobile ? (
+                /* Mobile: egocentric focus navigator */
+                <FamilyNavigator
+                  groupName={selectedGroup}
+                  contacts={contacts}
+                  onSelect={handleSelectContact}
                 />
-              </>
+              ) : (
+                <>
+                  {/* Desktop: scaled family tree */}
+                  <div ref={scrollRef} className="absolute inset-0 overflow-auto p-6">
+                    <div
+                      ref={contentRef}
+                      style={{ zoom, display: 'inline-block', minWidth: 'max-content' }}
+                    >
+                      <FamilyTreePanel
+                        groupName={selectedGroup}
+                        contacts={contacts}
+                        onSelectContact={handleSelectContact}
+                        onReady={handleReady}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Zoom controls (floating, bottom-right) */}
+                  <ZoomControls
+                    zoom={zoom}
+                    onZoomIn={() => setZoom(z => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))}
+                    onZoomOut={() => setZoom(z => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))}
+                    onFit={handleFit}
+                  />
+                </>
+              )
             ) : (
               /* All contacts flat grid */
               <div className="overflow-y-auto h-full p-6">
