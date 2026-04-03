@@ -76,9 +76,9 @@ def embed_photos(contacts_data: dict, photos_dir: Path) -> None:
         photo_path = photos_dir / f"{uid}.jpg"
         if not photo_path.exists():
             continue
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
         try:
-            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                tmp_path = Path(tmp.name)
             subprocess.run(
                 [
                     "sips",
@@ -90,11 +90,12 @@ def embed_photos(contacts_data: dict, photos_dir: Path) -> None:
                 check=True,
             )
             b64 = base64.b64encode(tmp_path.read_bytes()).decode("ascii")
-            tmp_path.unlink(missing_ok=True)
             contacts_data[uid]["photo_url"] = f"data:image/jpeg;base64,{b64}"
             embedded += 1
         except Exception as exc:
             logger.warning(f"Could not embed photo for {uid}: {exc}")
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
     logger.info(f"Embedded {embedded}/{len(with_photos)} photos")
 
