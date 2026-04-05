@@ -19,12 +19,41 @@ export default function FamilyTreeNode({ node, contacts, onSelect, parentCoupleU
   const hasChildren = node.children?.length > 0
   const childCount   = node.children?.length ?? 0
 
+  const line = 'bg-gray-300 dark:bg-gray-600'
+
+  // ── Phantom node: siblings with no in-group parent ──
+  if (node.couple.length === 0) {
+    if (childCount <= 1) {
+      return hasChildren
+        ? <FamilyTreeNode node={node.children[0]} contacts={contacts} onSelect={onSelect} parentCoupleUids={[]} />
+        : null
+    }
+    return (
+      <div className="flex flex-col items-center">
+        <div className="relative">
+          <div className={`absolute top-0 inset-x-0 h-px ${line}`} />
+          <div className="flex items-start">
+            {node.children.map((child, i) => (
+              <div key={i} className="flex flex-col items-center px-4">
+                <div className={`w-px h-5 ${line}`} />
+                <FamilyTreeNode
+                  node={child}
+                  contacts={contacts}
+                  onSelect={onSelect}
+                  parentCoupleUids={[]}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // A member is "blood" if they are a child of one of the parent couple's members.
   const isBlood = (uid) =>
     parentCoupleUids.length === 0 ||
     (contacts[uid]?.parent_uids?.some(p => parentCoupleUids.includes(p)) ?? false)
-
-  const line = 'bg-gray-300 dark:bg-gray-600'
 
   return (
     <div className="flex flex-col items-center">

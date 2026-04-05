@@ -128,7 +128,48 @@ def _build_node(
     return FamilyNode(couple=couple, children=child_nodes)
 
 
-def build_group_view(group_name: str, contacts: dict[str, Contact]) -> GroupView:
+def _find_sibling_groups(
+    root_units: list[list[str]],
+    contacts: dict[str, Contact],
+) -> list[list[int]]:
+    """
+    Return connected components of root_units indices linked by sibling_uids.
+    Each component is a list of indices into root_units.
+    """
+    uid_to_idx: dict[str, int] = {}
+    for i, unit in enumerate(root_units):
+        for uid in unit:
+            uid_to_idx[uid] = i
+
+    adj: dict[int, set[int]] = {i: set() for i in range(len(root_units))}
+    for i, unit in enumerate(root_units):
+        for uid in unit:
+            for sib in contacts[uid].sibling_uids:
+                if sib in uid_to_idx:
+                    j = uid_to_idx[sib]
+                    if j != i:
+                        adj[i].add(j)
+                        adj[j].add(i)
+
+    visited: set[int] = set()
+    groups: list[list[int]] = []
+    for start in range(len(root_units)):
+        if start in visited:
+            continue
+        group: list[int] = []
+        queue = [start]
+        while queue:
+            curr = queue.pop(0)
+            if curr in visited:
+                continue
+            visited.add(curr)
+            group.append(curr)
+            queue.extend(adj[curr] - visited)
+        groups.append(group)
+    return groups
+
+
+def build_group_view(group_name: str, contacts: dict[str, Contact], *, group_siblings: bool = True) -> GroupView:
     uid_set = set(contacts.keys())
 
     # A UID is a "child of the group" if at least one of its parents is in the group
@@ -151,7 +192,20 @@ def build_group_view(group_name: str, contacts: dict[str, Contact]) -> GroupView
 
     accounted: set[str] = set(uid for unit in root_units for uid in unit)
 
-    trees = [_build_node(unit, contacts, uid_set, accounted) for unit in root_units]
+    if group_siblings:
+        sibling_groups = _find_sibling_groups(root_units, contacts)
+        trees: list[FamilyNode] = []
+        for grp in sibling_groups:
+            if len(grp) == 1:
+                trees.append(_build_node(root_units[grp[0]], contacts, uid_set, accounted))
+            else:
+                child_nodes = [
+                    _build_node(root_units[i], contacts, uid_set, accounted)
+                    for i in sorted(grp)
+                ]
+                trees.append(FamilyNode(couple=[], children=child_nodes))
+    else:
+        trees = [_build_node(unit, contacts, uid_set, accounted) for unit in root_units]
 
     singles = [uid for uid in uid_set if uid not in accounted]
 
