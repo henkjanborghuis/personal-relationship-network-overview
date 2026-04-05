@@ -139,6 +139,16 @@ The app opens directly in this group instead of the "All contacts" view. Leave e
 
 ---
 
+### `group_siblings` — connect siblings without an in-group parent
+
+```yaml
+group_siblings: true
+```
+
+When `true` (the default), siblings who are all roots in a group (i.e. their parents are not in the group) are displayed side-by-side under a shared horizontal bar, making their relationship visible. Set to `false` to display each sibling's family as a separate tree.
+
+---
+
 ### `sync_groups` — which groups to sync
 
 ```yaml

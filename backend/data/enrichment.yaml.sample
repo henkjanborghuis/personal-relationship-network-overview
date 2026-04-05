@@ -13,6 +13,11 @@ default_group: ""
 # Example:
 #   default_group: "Familie Smit"
 
+# ─── Tree display options ─────────────────────────────────────────────────────
+# Group siblings with no shared in-group parent under a shared horizontal bar.
+# Set to false to display them as separate trees.
+group_siblings: true
+
 # ─── Sync filter ─────────────────────────────────────────────────────────────
 # List only the Apple Contacts group names you want to sync.
 # Leave empty ([]) to sync ALL contacts (slow if you have many).

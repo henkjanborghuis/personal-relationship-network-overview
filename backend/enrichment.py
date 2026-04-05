@@ -23,6 +23,12 @@ def load_default_group(enrichment_path: Path) -> str | None:
     return data.get("default_group") or None
 
 
+def load_group_siblings(enrichment_path: Path) -> bool:
+    """Return the configured group_siblings setting. Defaults to True."""
+    data = load_enrichment(enrichment_path)
+    return bool(data.get("group_siblings", True))
+
+
 def load_enrichment(path: Path) -> dict:
     if not path.exists():
         return {}

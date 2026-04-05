@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from enrichment import apply_enrichment, load_default_group
+from enrichment import apply_enrichment, load_default_group, load_group_siblings
 from grouper import build_group_view, build_all_group_views
 from models import AppSettings, Contact, GroupSummary, GroupView, SyncResult, UnresolvedRelation
 from parser import parse_contacts
@@ -98,7 +98,8 @@ def get_group_view(group_name: str) -> GroupView:
     group_contacts = {uid: c for uid, c in _contacts.items() if group_name in c.groups}
     if not group_contacts:
         raise HTTPException(status_code=404, detail=f"Group '{group_name}' not found or empty")
-    return build_group_view(group_name, group_contacts)
+    group_siblings = load_group_siblings(ENRICHMENT_FILE)
+    return build_group_view(group_name, group_contacts, group_siblings=group_siblings)
 
 
 @app.get("/api/contacts", response_model=list[Contact])
