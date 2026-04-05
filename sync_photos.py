@@ -141,8 +141,9 @@ def export_keyphoto(keyphoto, dest_dir: str) -> str | None:
 def export_face_crop(person, dest_dir: str, Image) -> str | None:
     """
     Export a face-cropped portrait for the person to dest_dir.
-    Uses the face detection bounding box from the key photo specifically,
-    so the result matches what you see in the Apple Photos People album.
+    Prefers the face detection bounding box from the key photo (matching the
+    Apple Photos People album). Falls back to the first other photo that has a
+    valid face rect if the key photo lacks one, logging a WARN.
     Returns path to cropped JPEG, or None if not possible.
     """
     if not person.face_info or person.keyphoto is None:
@@ -156,6 +157,31 @@ def export_face_crop(person, dest_dir: str, Image) -> str | None:
         if f.photo and f.photo.uuid == keyphoto_uuid and f.photo.path:
             face = f
             break
+
+    # Validate that the key photo face has a usable rect; warn + fallback if not
+    key_face_rect = None
+    if face is not None:
+        try:
+            key_face_rect = face.face_rect()
+        except Exception:
+            key_face_rect = None
+
+    if not key_face_rect or len(key_face_rect) < 2:
+        if face is not None:
+            print(f"  WARN: key photo has no face rect for {person.name!r}, trying other photos")
+        else:
+            print(f"  WARN: no face detection on key photo for {person.name!r}, trying other photos")
+        face = None
+        for f in person.face_info:
+            if f.photo and f.photo.path and f.photo.uuid != keyphoto_uuid:
+                try:
+                    r = f.face_rect()
+                except Exception:
+                    continue
+                if r and len(r) >= 2:
+                    face = f
+                    print(f"  INFO: using face from fallback photo {f.photo.uuid} for {person.name!r}")
+                    break
 
     if face is None:
         return None
@@ -172,8 +198,11 @@ def export_face_crop(person, dest_dir: str, Image) -> str | None:
             if converted is None:
                 return None
             photo_path = converted
-        img = ImageOps.exif_transpose(Image.open(photo_path))
-        w, h = img.size
+        # Open raw (un-rotated) image so that face_rect pixel coordinates,
+        # which are in the raw pixel space, align with the image data.
+        # We transpose only the cropped region afterwards.
+        img_raw = Image.open(photo_path)
+        w, h = img_raw.size
 
         x1, y1 = rect[0]
         x2, y2 = rect[1]
@@ -189,7 +218,7 @@ def export_face_crop(person, dest_dir: str, Image) -> str | None:
         cx2 = int(min(w, x2 + pad_x))
         cy2 = int(min(h, y2 + pad_y))
 
-        cropped = img.crop((cx, cy, cx2, cy2))
+        cropped = ImageOps.exif_transpose(img_raw.crop((cx, cy, cx2, cy2)))
         out_path = os.path.join(dest_dir, f"face_{face.photo.uuid}.jpg")
         cropped.convert("RGB").save(out_path, "JPEG", quality=90)
         return out_path
