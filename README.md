@@ -132,7 +132,7 @@ All configuration lives in **`backend/data/enrichment.yaml`**.
 ### `default_group` — which group to open on startup
 
 ```yaml
-default_group: "Familie Smit"
+default_group: "Family X"
 ```
 
 The app opens directly in this group instead of the "All contacts" view. Leave empty (or omit) to start with all contacts.
@@ -143,12 +143,9 @@ The app opens directly in this group instead of the "All contacts" view. Leave e
 
 ```yaml
 sync_groups:
-  - Bonteweg
-  - Club Rijssen
-  - Familie Borghuis
-  - Familie Smit
-  - Familie te Luggenhorst
-  - Vrienden
+  - Group_1
+  - Group_2
+  - Group_9
 ```
 
 Only contacts in these Apple Contacts groups are exported during sync. This keeps sync fast and focused. Set to `[]` (empty) to sync all groups — but this can be slow with many contacts.
@@ -161,15 +158,15 @@ Declaring a family sets all parent→child links and marks all children as sibli
 
 ```yaml
 families:
-  Voortman:
+  Example_family:
     parents:
-      - "UID-Johan-Voortman"
-      - "UID-Alie-Voortman"
+      - "UID-uncle_family"
+      - "UID-aunt_family"
     children:
-      - "UID-Rik-Voortman"
-      - "UID-Geerd-Voortman"
-      - "UID-Inge-Voortman"
-      - "UID-Anne-Voortman"
+      - "UID-child_1"
+      - "UID-child_2"
+      - "UID-child_2"
+      - "UID-child_4"
 ```
 
 Use this only for contacts with no Related Names set in Apple Contacts. If one sibling already has parents set in Contacts, inference will automatically propagate to the others — no `families:` entry needed.
