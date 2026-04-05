@@ -103,6 +103,13 @@ def _parse_vcard(vcard) -> Optional[Contact]:
             birthday = _parse_date(p.value)
             break
 
+        nickname = None
+        for p in contents.get("nickname", []):
+            v = p.value.strip()
+            if v:
+                nickname = v
+                break
+
         notes = None
         for p in contents.get("note", []):
             v = p.value.strip()
@@ -148,6 +155,7 @@ def _parse_vcard(vcard) -> Optional[Contact]:
             first_name=first_name,
             last_name=last_name,
             display_name=display_name,
+            nickname=nickname,
             initials=_get_initials(first_name, last_name),
             phone_numbers=phones,
             emails=emails,
@@ -192,11 +200,19 @@ def _resolve_relationships(contacts: dict[str, Contact]) -> list[dict]:
     """
     Attempt to resolve raw Related Names text → contact UIDs.
     Returns list of unresolved / ambiguous relations for diagnostics.
+
+    Resolution order:
+    1. Nickname (exact match wins if unique)
+    2. Full display name
+    3. First name only (fallback hint)
     """
-    # Build case-insensitive name → UIDs index
+    # Build case-insensitive name → UIDs indices
+    by_nickname: dict[str, list[str]] = {}
     by_full: dict[str, list[str]] = {}
     by_first: dict[str, list[str]] = {}
     for uid, c in contacts.items():
+        if c.nickname:
+            by_nickname.setdefault(c.nickname.lower().strip(), []).append(uid)
         full = c.display_name.lower().strip()
         by_full.setdefault(full, []).append(uid)
         if c.first_name:
@@ -208,12 +224,18 @@ def _resolve_relationships(contacts: dict[str, Contact]) -> list[dict]:
             target_name = rel.name.lower().strip()
             label = rel.label
 
-            candidates = [u for u in by_full.get(target_name, []) if u != uid]
+            # 1. Try nickname match first
+            nick_candidates = [u for u in by_nickname.get(target_name, []) if u != uid]
+            if len(nick_candidates) == 1:
+                _apply_relation(contacts, uid, nick_candidates[0], label)
+                continue
 
+            # 2. Try full display name match
+            candidates = [u for u in by_full.get(target_name, []) if u != uid]
             if len(candidates) == 1:
                 _apply_relation(contacts, uid, candidates[0], label)
             else:
-                # Fall back to first-name match as a hint (still flag as ambiguous if >1)
+                # 3. Fall back to first-name match as a hint (still flag as ambiguous if >1)
                 fname_candidates = [u for u in by_first.get(target_name, []) if u != uid]
                 if len(fname_candidates) == 1 and not candidates:
                     _apply_relation(contacts, uid, fname_candidates[0], label)

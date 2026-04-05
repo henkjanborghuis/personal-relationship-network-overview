@@ -13,6 +13,7 @@ class Contact(BaseModel):
     first_name: str
     last_name: str
     display_name: str
+    nickname: Optional[str] = None
     initials: str
     groups: list[str] = []
     phone_numbers: list[str] = []
