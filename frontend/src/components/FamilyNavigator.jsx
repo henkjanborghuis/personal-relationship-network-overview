@@ -48,12 +48,8 @@ export default function FamilyNavigator({ groupName, contacts, onSelect }) {
     )
   }
 
-  // Root level mode: multiple root trees with no common ancestor — show them all
+  // Root level mode: multiple root trees with no common ancestor — show each family separately
   if (!focalUid) {
-    const rootUids = groupView.trees.flatMap(t => t.couple)
-    const childUids = [...new Set(
-      rootUids.flatMap(uid => contacts[uid]?.children_uids ?? [])
-    )]
     return (
       <div className="flex flex-col h-full overflow-hidden">
         <div className="shrink-0 px-4 py-2 border-b border-gray-100 dark:border-gray-800 flex items-center">
@@ -66,24 +62,32 @@ export default function FamilyNavigator({ groupName, contacts, onSelect }) {
         </div>
         <div className="flex-1 overflow-y-auto">
           <div className="flex flex-col p-4">
-            <div className="py-4">
-              <div className="text-xs font-medium text-blue-500 dark:text-blue-400 uppercase tracking-wide mb-2">
-                Viewing
-              </div>
-              <div className="flex flex-wrap gap-3 px-3 py-2.5 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 shadow-sm">
-                {rootUids.map(uid => contacts[uid] && (
-                  <InitialsCircle key={uid} contact={contacts[uid]} onSelect={navigateTo} size="md" />
-                ))}
-              </div>
-            </div>
-            {childUids.length > 0 && (
-              <NavigatorRow
-                label="Children"
-                uids={childUids}
-                contacts={contacts}
-                onTap={navigateTo}
-              />
-            )}
+            {groupView.trees.map((tree, idx) => {
+              const rootSet = new Set(tree.couple)
+              const childUids = tree.children.map(child =>
+                child.couple.find(uid => contacts[uid]?.parent_uids?.some(p => rootSet.has(p)))
+                ?? child.couple[0]
+              )
+              return (
+                <div key={idx} className={idx > 0 ? 'border-t border-gray-100 dark:border-gray-800' : ''}>
+                  <div className="py-4">
+                    <div className="flex flex-wrap gap-3 px-3 py-2.5 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 shadow-sm">
+                      {tree.couple.map(uid => contacts[uid] && (
+                        <InitialsCircle key={uid} contact={contacts[uid]} onSelect={navigateTo} size="md" />
+                      ))}
+                    </div>
+                  </div>
+                  {childUids.length > 0 && (
+                    <NavigatorRow
+                      label="Children"
+                      uids={childUids}
+                      contacts={contacts}
+                      onTap={navigateTo}
+                    />
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

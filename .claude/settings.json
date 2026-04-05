@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); echo \"$input\" | python3 -c \"import sys,json; d=json.load(sys.stdin); exit(0 if 'frontend/src/' in d.get('tool_input',{}).get('file_path','') else 1)\" && npm --prefix /Users/henkjanborghuis/github/fafo/frontend run build; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}
