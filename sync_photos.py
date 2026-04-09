@@ -55,9 +55,8 @@ def convert_heic_to_jpeg(heic_path: str, dest_dir: str) -> str | None:
     return out_path if proc.returncode == 0 and os.path.exists(out_path) else None
 
 
-def get_photos_persons(osxphotos):
+def get_photos_persons(db):
     """Return list of (name, person) tuples from Photos People album."""
-    db = osxphotos.PhotosDB()
     persons = []
     for person in db.person_info:
         name = person.name
@@ -69,8 +68,24 @@ def get_photos_persons(osxphotos):
     return persons
 
 
+def get_person_contact_uids(db) -> dict:
+    """Return {person_uuid: contact_uid} for Photos persons linked to Contacts."""
+    try:
+        rows = db.execute(
+            "SELECT ZPERSONUUID, ZPERSONURI FROM ZPERSON WHERE ZPERSONURI IS NOT NULL"
+        ).fetchall()
+        result = {}
+        for uuid, uri in rows:
+            if uri:
+                result[uuid] = uri
+        return result
+    except Exception as e:
+        print(f"  WARNING: could not read contact links from Photos DB: {e}")
+        return {}
+
+
 def get_contacts_via_applescript():
-    """Return dict of {full_name: contact_id} for all Apple Contacts."""
+    """Return dict of {contact_id: full_name} for all Apple Contacts."""
     script = '''
     tell application "Contacts"
         set contactList to {}
@@ -101,7 +116,7 @@ def get_contacts_via_applescript():
             parts = item.split("||", 1)
             name = parts[0].strip()
             uid = parts[1].strip()
-            contacts[name] = uid
+            contacts[uid] = name
 
     return contacts
 
@@ -252,30 +267,51 @@ def main():
             use_crop = False
 
     print("Reading Apple Photos People album…")
-    persons = get_photos_persons(osxphotos)
+    db = osxphotos.PhotosDB()
+    persons = get_photos_persons(db)
     print(f"  Found {len(persons)} named persons with key photos in Photos")
+    person_contact_uids = get_person_contact_uids(db)
 
     print("Reading Apple Contacts…")
-    contacts = get_contacts_via_applescript()
+    contacts = get_contacts_via_applescript()  # {uid: name}
     print(f"  Found {len(contacts)} contacts")
 
-    # Build lookup: lowercase name → (original_name, uid)
-    contacts_lower = {normalize_name(k): (k, v) for k, v in contacts.items()}
+    # Build name→[uid, ...] lookup for fallback matching
+    contacts_by_name = {}
+    for uid, name in contacts.items():
+        key = normalize_name(name)
+        if key not in contacts_by_name:
+            contacts_by_name[key] = []
+        contacts_by_name[key].append(uid)
 
     matched = []
     unmatched_photos = []
 
+    # Pass 1: match via Photos→Contacts UID link (handles duplicate names)
+    unmatched_by_uid = []
     for photo_name, person in persons:
+        contact_uid = person_contact_uids.get(person.uuid)
+        if contact_uid and contact_uid in contacts:
+            matched.append((photo_name, contacts[contact_uid], contact_uid, person, "linked"))
+        else:
+            unmatched_by_uid.append((photo_name, person))
+
+    # Pass 2: name-based fallback for unlinked Photos persons
+    for photo_name, person in unmatched_by_uid:
         key = normalize_name(photo_name)
-        if key in contacts_lower:
-            orig_name, uid = contacts_lower[key]
-            matched.append((photo_name, orig_name, uid, person))
+        uids = contacts_by_name.get(key, [])
+        if len(uids) == 1:
+            uid = uids[0]
+            matched.append((photo_name, contacts[uid], uid, person, "name"))
+        elif len(uids) > 1:
+            print(f"  WARN: '{photo_name}' matches {len(uids)} contacts by name and has no Photos→Contacts link — skipping")
+            unmatched_photos.append(photo_name)
         else:
             unmatched_photos.append(photo_name)
 
     if args.person:
         filter_key = normalize_name(args.person)
-        matched = [m for m in matched if normalize_name(m[0]) == filter_key]
+        matched = [m for m in matched if normalize_name(m[1]) == filter_key]
         if not matched:
             print(f"\nNo match found for '{args.person}'. Check spelling or run without --person to see all matches.")
             return
@@ -291,8 +327,9 @@ def main():
         print("\n--- DRY RUN (pass --apply to set photos) ---\n")
         crop_label = "face-cropped" if use_crop else "key photo"
         print(f"Would set photos for ({crop_label}):")
-        for photo_name, contact_name, uid, _ in matched:
-            print(f"  {photo_name}  →  {contact_name}")
+        for photo_name, contact_name, uid, _, method in matched:
+            tag = "[linked]" if method == "linked" else "[name match]"
+            print(f"  {photo_name}  →  {contact_name}  {tag}")
         if args.verbose and unmatched_photos:
             print(f"\nUnmatched Photos persons:")
             for name in sorted(unmatched_photos):
@@ -308,7 +345,7 @@ def main():
     fallback_count = 0
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        for photo_name, contact_name, uid, person in matched:
+        for photo_name, contact_name, uid, person, method in matched:
             print(f"  {photo_name}…", end=" ", flush=True)
 
             exported_path = None
@@ -346,7 +383,7 @@ def main():
         print("Check System Settings > Privacy & Security > Contacts")
 
     if args.verbose and unmatched_photos:
-        print(f"\nUnmatched Photos persons (no contact found):")
+        print(f"\nUnmatched Photos persons (no contact found or ambiguous name):")
         for name in sorted(unmatched_photos):
             print(f"  {name}")
 
