@@ -85,14 +85,16 @@ def get_person_contact_uids(db) -> dict:
 
 
 def get_contacts_via_applescript():
-    """Return dict of {contact_id: full_name} for all Apple Contacts."""
+    """Return dict of {contact_id: (full_name, nickname)} for all Apple Contacts."""
     script = '''
     tell application "Contacts"
         set contactList to {}
         repeat with p in every person
             set n to name of p
             set uid to id of p
-            set end of contactList to (n & "||" & uid)
+            set nk to nickname of p
+            if nk is missing value then set nk to ""
+            set end of contactList to (n & "||" & uid & "||" & nk)
         end repeat
         return contactList
     end tell
@@ -113,10 +115,11 @@ def get_contacts_via_applescript():
     for item in raw.split(", "):
         item = item.strip()
         if "||" in item:
-            parts = item.split("||", 1)
+            parts = item.split("||")
             name = parts[0].strip()
             uid = parts[1].strip()
-            contacts[uid] = name
+            nickname = parts[2].strip() if len(parts) > 2 else ""
+            contacts[uid] = (name, nickname)
 
     return contacts
 
@@ -273,12 +276,12 @@ def main():
     person_contact_uids = get_person_contact_uids(db)
 
     print("Reading Apple Contacts…")
-    contacts = get_contacts_via_applescript()  # {uid: name}
+    contacts = get_contacts_via_applescript()  # {uid: (name, nickname)}
     print(f"  Found {len(contacts)} contacts")
 
     # Build name→[uid, ...] lookup for fallback matching
     contacts_by_name = {}
-    for uid, name in contacts.items():
+    for uid, (name, _nickname) in contacts.items():
         key = normalize_name(name)
         if key not in contacts_by_name:
             contacts_by_name[key] = []
@@ -292,7 +295,8 @@ def main():
     for photo_name, person in persons:
         contact_uid = person_contact_uids.get(person.uuid)
         if contact_uid and contact_uid in contacts:
-            matched.append((photo_name, contacts[contact_uid], contact_uid, person, "linked"))
+            name, nickname = contacts[contact_uid]
+            matched.append((photo_name, name, nickname, contact_uid, person, "linked"))
         else:
             unmatched_by_uid.append((photo_name, person))
 
@@ -302,7 +306,8 @@ def main():
         uids = contacts_by_name.get(key, [])
         if len(uids) == 1:
             uid = uids[0]
-            matched.append((photo_name, contacts[uid], uid, person, "name"))
+            name, nickname = contacts[uid]
+            matched.append((photo_name, name, nickname, uid, person, "name"))
         elif len(uids) > 1:
             print(f"  WARN: '{photo_name}' matches {len(uids)} contacts by name and has no Photos→Contacts link — skipping")
             unmatched_photos.append(photo_name)
@@ -327,9 +332,10 @@ def main():
         print("\n--- DRY RUN (pass --apply to set photos) ---\n")
         crop_label = "face-cropped" if use_crop else "key photo"
         print(f"Would set photos for ({crop_label}):")
-        for photo_name, contact_name, uid, _, method in matched:
+        for photo_name, contact_name, contact_nickname, uid, _, method in matched:
             tag = "[linked]" if method == "linked" else "[name match]"
-            print(f"  {photo_name}  →  {contact_name}  {tag}")
+            label = f"{contact_name} ({contact_nickname})" if contact_nickname else contact_name
+            print(f"  {photo_name}  →  {label}  {tag}")
         if args.verbose and unmatched_photos:
             print(f"\nUnmatched Photos persons:")
             for name in sorted(unmatched_photos):
@@ -345,8 +351,9 @@ def main():
     fallback_count = 0
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        for photo_name, contact_name, uid, person, method in matched:
-            print(f"  {photo_name}…", end=" ", flush=True)
+        for photo_name, contact_name, contact_nickname, uid, person, method in matched:
+            label = f"{contact_name} ({contact_nickname})" if contact_nickname else contact_name
+            print(f"  {label}…", end=" ", flush=True)
 
             exported_path = None
 
