@@ -56,6 +56,7 @@ class UnresolvedRelation(BaseModel):
     related_name: str
     label: str
     candidates: list[str] = []  # UIDs of ambiguous matches
+    reason: str = "not_found"   # "not_found" | "out_of_scope" | "ambiguous"
 
 
 class SyncResult(BaseModel):
