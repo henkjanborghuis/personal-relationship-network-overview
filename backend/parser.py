@@ -138,12 +138,16 @@ def _parse_vcard(vcard) -> Optional[Contact]:
         anniversary = None
         raw_related: list[RawRelation] = []
 
+        death_date = None
         for item_data in item_groups.values():
             label_raw = item_data.get("x-ablabel", "")
             label = _parse_label(label_raw)
 
             if "x-abdate" in item_data and label == "anniversary":
                 anniversary = _parse_date(item_data["x-abdate"])
+
+            if "x-abdate" in item_data and label == "sterfdag":
+                death_date = _parse_date(item_data["x-abdate"])
 
             if "x-abrelatednames" in item_data:
                 name = item_data["x-abrelatednames"].strip()
@@ -161,6 +165,7 @@ def _parse_vcard(vcard) -> Optional[Contact]:
             emails=emails,
             birthday=birthday,
             anniversary=anniversary,
+            death_date=death_date,
             notes=notes,
             raw_related=raw_related,
         )

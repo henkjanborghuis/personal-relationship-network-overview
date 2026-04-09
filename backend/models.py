@@ -20,6 +20,7 @@ class Contact(BaseModel):
     emails: list[str] = []
     birthday: Optional[str] = None    # ISO date: YYYY-MM-DD or --MM-DD (no year)
     anniversary: Optional[str] = None # ISO date: YYYY-MM-DD
+    death_date: Optional[str] = None  # ISO date: YYYY-MM-DD; "0001-01-01" = deceased, date unknown
     notes: Optional[str] = None
     photo_url: Optional[str] = None  # e.g. "/photos/{uid}.jpg"
     interests: list[str] = []

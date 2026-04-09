@@ -47,6 +47,9 @@ export default function ContactDrawer({ contact, contacts, onClose, onSelectCont
   const bday = formatDate(contact.birthday)
   const bdayAge = age(contact.birthday)
   const anniv = formatDate(contact.anniversary)
+  const isDeceased = !!contact.death_date
+  const deathDateKnown = contact.death_date && contact.death_date !== '0001-01-01'
+  const deathFormatted = deathDateKnown ? formatDate(contact.death_date) : null
 
   return (
     <>
@@ -64,6 +67,8 @@ export default function ContactDrawer({ contact, contacts, onClose, onSelectCont
           <div className="flex-1 min-w-0">
             <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base leading-tight">
               {contact.display_name}
+              {isDeceased && <span className="text-gray-400 dark:text-gray-500 ml-1">†</span>}
+              {!isDeceased && bdayAge !== null && <span className="text-gray-400 dark:text-gray-500 ml-1 font-normal text-sm">({bdayAge})</span>}
             </h2>
             {contact.emails[0] && (
               <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">{contact.emails[0]}</p>
@@ -81,8 +86,8 @@ export default function ContactDrawer({ contact, contacts, onClose, onSelectCont
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
 
-          {/* Birthday & Anniversary */}
-          {(bday || anniv) && (
+          {/* Birthday, Anniversary & Death */}
+          {(bday || anniv || isDeceased) && (
             <Section title="Dates">
               {bday && (
                 <p className="text-sm text-gray-700 dark:text-gray-300 mb-1">
@@ -91,9 +96,15 @@ export default function ContactDrawer({ contact, contacts, onClose, onSelectCont
                 </p>
               )}
               {anniv && (
-                <p className="text-sm text-gray-700 dark:text-gray-300">
+                <p className="text-sm text-gray-700 dark:text-gray-300 mb-1">
                   <span className="text-gray-400 mr-1">Anniversary</span>
                   {anniv}
+                </p>
+              )}
+              {isDeceased && (
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  <span className="text-gray-400 mr-1">†</span>
+                  {deathFormatted ?? 'date unknown'}
                 </p>
               )}
             </Section>
@@ -110,6 +121,10 @@ export default function ContactDrawer({ contact, contacts, onClose, onSelectCont
                     onClick={() => onSelectContact(spouse.uid)}
                   >
                     {spouse.display_name}
+                    {spouse.death_date && <span className="text-gray-400 ml-1">†</span>}
+                    {!spouse.death_date && spouse.birthday && !spouse.birthday.startsWith('--') && age(spouse.birthday) !== null && (
+                      <span className="text-gray-400 ml-1 text-xs">({age(spouse.birthday)})</span>
+                    )}
                   </button>
                 </div>
               )}
@@ -124,6 +139,10 @@ export default function ContactDrawer({ contact, contacts, onClose, onSelectCont
                         onClick={() => onSelectContact(p.uid)}
                       >
                         {p.display_name}
+                        {p.death_date && <span className="text-gray-400 ml-1">†</span>}
+                        {!p.death_date && p.birthday && !p.birthday.startsWith('--') && age(p.birthday) !== null && (
+                          <span className="text-gray-400 ml-1 text-xs">({age(p.birthday)})</span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -140,7 +159,8 @@ export default function ContactDrawer({ contact, contacts, onClose, onSelectCont
                         onClick={() => onSelectContact(c.uid)}
                       >
                         {c.display_name}
-                        {c.birthday && !c.birthday.startsWith('--') && age(c.birthday) !== null && (
+                        {c.death_date && <span className="text-gray-400 ml-1">†</span>}
+                        {!c.death_date && c.birthday && !c.birthday.startsWith('--') && age(c.birthday) !== null && (
                           <span className="text-gray-400 ml-1 text-xs">({age(c.birthday)})</span>
                         )}
                       </button>
