@@ -201,7 +201,10 @@ def _apply_relation(contacts: dict[str, Contact], from_uid: str, to_uid: str, la
             tgt.sibling_uids.append(from_uid)
 
 
-def _resolve_relationships(contacts: dict[str, Contact]) -> list[dict]:
+def _resolve_relationships(
+    contacts: dict[str, Contact],
+    all_contact_names: set[str] | None = None,
+) -> list[dict]:
     """
     Attempt to resolve raw Related Names text → contact UIDs.
     Returns list of unresolved / ambiguous relations for diagnostics.
@@ -245,6 +248,12 @@ def _resolve_relationships(contacts: dict[str, Contact]) -> list[dict]:
                 if len(fname_candidates) == 1 and not candidates:
                     _apply_relation(contacts, uid, fname_candidates[0], label)
                 else:
+                    if candidates or fname_candidates:
+                        reason = "ambiguous"
+                    elif all_contact_names and target_name in all_contact_names:
+                        reason = "out_of_scope"
+                    else:
+                        reason = "not_found"
                     unresolved.append(
                         {
                             "contact_uid": uid,
@@ -252,6 +261,7 @@ def _resolve_relationships(contacts: dict[str, Contact]) -> list[dict]:
                             "related_name": rel.name,
                             "label": label,
                             "candidates": candidates or fname_candidates,
+                            "reason": reason,
                         }
                     )
 
@@ -320,7 +330,9 @@ PHOTOS_DIR = Path(__file__).parent / "data" / "photos"
 
 
 def parse_contacts(
-    vcf_text: str, groups_data: dict[str, list[str]]
+    vcf_text: str,
+    groups_data: dict[str, list[str]],
+    all_contact_names: set[str] | None = None,
 ) -> tuple[dict[str, Contact], list[dict]]:
     """
     Parse vCards, assign groups, resolve relationships.
@@ -347,7 +359,7 @@ def parse_contacts(
             if uid in contacts and group_name not in contacts[uid].groups:
                 contacts[uid].groups.append(group_name)
 
-    unresolved = _resolve_relationships(contacts)
+    unresolved = _resolve_relationships(contacts, all_contact_names)
 
     logger.info(
         f"Parsed {len(contacts)} contacts, {len(unresolved)} unresolved relations"

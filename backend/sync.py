@@ -149,9 +149,30 @@ def export_groups(group_names: list[str] | None = None) -> dict[str, list[str]]:
     return groups
 
 
-def sync_all() -> tuple[str, dict[str, list[str]]]:
-    """Run both exports and return (vcf_text, groups_dict)."""
+def export_all_names() -> set[str]:
+    """Return display names of ALL contacts in Apple Contacts (not filtered by group)."""
+    script = """
+tell application "Contacts"
+    set output to ""
+    repeat with p in every person
+        set n to name of p
+        if n is not missing value then
+            set output to output & n & "\n"
+        end if
+    end repeat
+    output
+end tell
+"""
+    raw = _run_applescript(script)
+    return {line.strip().lower() for line in raw.splitlines() if line.strip()}
+
+
+def sync_all() -> tuple[str, dict[str, list[str]], set[str]]:
+    """Run all exports and return (vcf_text, groups_dict, all_contact_names)."""
+    import json
     group_names = _load_sync_groups()
     vcf_text = export_vcards(group_names)
     groups = export_groups(group_names)
-    return vcf_text, groups
+    all_names = export_all_names()
+    (DATA_DIR / "all_names.json").write_text(json.dumps(sorted(all_names)))
+    return vcf_text, groups, all_names

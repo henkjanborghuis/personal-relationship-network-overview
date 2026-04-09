@@ -49,8 +49,11 @@ def _load_contacts() -> None:
     if groups_path.exists():
         groups_data = json.loads(groups_path.read_text())
 
+    all_names_path = DATA_DIR / "all_names.json"
+    all_names = set(json.loads(all_names_path.read_text())) if all_names_path.exists() else None
+
     vcf_text = vcf_path.read_text(encoding="utf-8")
-    _contacts, _unresolved = parse_contacts(vcf_text, groups_data)
+    _contacts, _unresolved = parse_contacts(vcf_text, groups_data, all_names)
     _contacts = apply_enrichment(_contacts, ENRICHMENT_FILE)
     logger.info(f"Loaded {len(_contacts)} contacts")
 
@@ -66,14 +69,14 @@ def sync_contacts() -> SyncResult:
     global _contacts, _unresolved
     import json
 
-    vcf_text, groups_data = sync_all()
+    vcf_text, groups_data, all_names = sync_all()
     # Persist groups for future loads
     DATA_DIR.mkdir(exist_ok=True)
     (DATA_DIR / "groups.json").write_text(
         json.dumps(groups_data, ensure_ascii=False), encoding="utf-8"
     )
 
-    _contacts, _unresolved = parse_contacts(vcf_text, groups_data)
+    _contacts, _unresolved = parse_contacts(vcf_text, groups_data, all_names)
     _contacts = apply_enrichment(_contacts, ENRICHMENT_FILE)
 
     return SyncResult(
