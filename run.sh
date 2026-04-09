@@ -9,7 +9,17 @@ cd "$(dirname "$0")"
 echo "Installing backend dependencies..."
 pip3 install -q -r backend/requirements.txt
 
-if [ ! -d "frontend/dist" ] || [ "$1" = "--rebuild" ]; then
+NEEDS_BUILD=false
+if [ ! -d "frontend/dist" ]; then
+  NEEDS_BUILD=true
+elif [ "$1" = "--rebuild" ]; then
+  NEEDS_BUILD=true
+elif find frontend/src frontend/index.html frontend/package.json -newer frontend/dist/index.html 2>/dev/null | grep -q .; then
+  echo "Frontend source changed — rebuilding..."
+  NEEDS_BUILD=true
+fi
+
+if [ "$NEEDS_BUILD" = true ]; then
   echo "Building frontend..."
   cd frontend
   npm install --silent

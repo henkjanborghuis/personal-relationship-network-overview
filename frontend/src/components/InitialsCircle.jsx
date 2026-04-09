@@ -44,7 +44,7 @@ export default function InitialsCircle({ contact, onSelect, size = 'md' }) {
         </div>
       )}
       <span className={`${s.label} text-center text-gray-600 dark:text-gray-400 truncate leading-tight`}>
-        {contact.first_name || contact.display_name}
+        {contact.first_name || contact.display_name}{contact.death_date ? ' †' : ''}
       </span>
     </div>
   )
