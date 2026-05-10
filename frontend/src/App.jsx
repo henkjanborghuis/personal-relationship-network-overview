@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { getAllContacts, getContactsMap, getGroups, getSettings, syncContacts, getExportDestinations, pickExportDirectory, exportHtml, IS_STATIC } from './api'
+import { getAllContacts, getContactsMap, getGroups, getSettings, syncContacts, getExportDestinations, pickExportDirectory, exportToDownloads, exportHtml, IS_STATIC } from './api'
 import GroupSidebar from './components/GroupSidebar'
 import FamilyTreePanel from './components/FamilyTreePanel'
 import FamilyNavigator from './components/FamilyNavigator'
@@ -202,11 +202,11 @@ export default function App() {
     }
   }
 
-  const runExport = async (outputDir) => {
+  const runExport = async (token) => {
     setExportPickerOpen(false)
     setExporting(true)
     try {
-      const result = await exportHtml(outputDir)
+      const result = await exportHtml(token)
       setNotification({
         type: 'success',
         title: 'Export complete',
@@ -219,13 +219,28 @@ export default function App() {
     }
   }
 
-  const handlePickDownloads = () => runExport(exportDestinations.downloads)
+  const handlePickDownloads = async () => {
+    setExportPickerOpen(false)
+    setExporting(true)
+    try {
+      const result = await exportToDownloads()
+      setNotification({
+        type: 'success',
+        title: 'Export complete',
+        details: `${result.contacts_count} contacts saved to ${result.output_path} (${result.size_kb} KB)`,
+      })
+    } catch (e) {
+      setNotification({ type: 'error', title: 'Export failed', details: e.message })
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const handlePickICloud = async () => {
     setExportPickerOpen(false)
-    const { path } = await pickExportDirectory()
-    if (!path) return  // user cancelled
-    runExport(path)
+    const { token } = await pickExportDirectory()
+    if (!token) return  // user cancelled
+    runExport(token)
   }
 
   const handleSelectContact = (uid) => setSelectedUid(uid)

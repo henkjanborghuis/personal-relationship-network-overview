@@ -3,6 +3,7 @@ FastAPI backend for the personal contacts overview app.
 """
 import logging
 import subprocess
+import uuid
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -31,6 +32,10 @@ app.add_middleware(
 # In-memory store — populated on startup and on /api/sync
 _contacts: dict[str, Contact] = {}
 _unresolved: list[dict] = []
+
+# Short-lived export tokens: token → validated Path chosen by the server-side folder picker.
+# Consumed on first use so each token is single-use.
+_pending_exports: dict[str, Path] = {}
 
 DATA_DIR = Path(__file__).parent / "data"
 ENRICHMENT_FILE = DATA_DIR / "enrichment.yaml"
@@ -140,54 +145,11 @@ def _allowed_export_dirs() -> list[Path]:
     return [p for p in candidates if p.exists()]
 
 
-def _validate_export_dir(output_dir: str) -> Path:
-    """Resolve path and assert it sits inside an allowed base directory."""
-    resolved = Path(output_dir).resolve()
-    allowed = [p.resolve() for p in _allowed_export_dirs()]
-    if not any(resolved == a or resolved.is_relative_to(a) for a in allowed):
-        raise HTTPException(
-            status_code=400,
-            detail="Output directory must be within Downloads or iCloud Drive",
-        )
-    return resolved
-
-
-@app.get("/api/export/destinations")
-def get_export_destinations() -> dict:
-    """Return available export destination paths on this machine."""
-    home = Path.home()
-    downloads = home / "Downloads"
-    icloud = home / "Library" / "Mobile Documents" / "com~apple~CloudDocs"
-    return {
-        "downloads": str(downloads) if downloads.exists() else None,
-        "icloud": str(icloud) if icloud.exists() else None,
-    }
-
-
-@app.get("/api/export/pick-directory")
-def pick_directory() -> dict:
-    """Show the native macOS folder picker starting in iCloud Drive, return chosen path or null."""
-    icloud = Path.home() / "Library" / "Mobile Documents" / "com~apple~CloudDocs"
-    default = str(icloud) if icloud.exists() else str(Path.home())
-    result = subprocess.run(
-        ["osascript", "-e",
-         f'POSIX path of (choose folder with prompt "Select folder in iCloud Drive"'
-         f' default location POSIX file "{default}")'],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0:
-        return {"path": result.stdout.strip()}
-    return {"path": None}  # user cancelled
-
-
-@app.get("/api/export", response_model=ExportResult)
-def export_html(output_dir: str) -> ExportResult:
-    """Build and write a self-contained HTML export to the given directory."""
+def _run_export(output_dir: Path) -> ExportResult:
+    """Build and write the HTML export to a fully server-controlled Path."""
     from exporter import build_app_data, embed_photos, build_frontend, inline_assets
 
-    resolved_dir = _validate_export_dir(output_dir)
-    output_path = resolved_dir / "contacts-overview.html"
+    output_path = output_dir / "contacts-overview.html"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     app_data = build_app_data(_contacts, ENRICHMENT_FILE)
@@ -203,6 +165,68 @@ def export_html(output_dir: str) -> ExportResult:
         contacts_count=len(_contacts),
         groups_count=len(app_data["groups"]),
     )
+
+
+@app.get("/api/export/destinations")
+def get_export_destinations() -> dict:
+    """Return which export destinations are available on this machine."""
+    home = Path.home()
+    downloads = home / "Downloads"
+    icloud = home / "Library" / "Mobile Documents" / "com~apple~CloudDocs"
+    return {
+        "downloads": downloads.exists(),
+        "icloud": icloud.exists(),
+    }
+
+
+@app.get("/api/export/pick-directory")
+def pick_directory() -> dict:
+    """
+    Show the native macOS folder picker (opening inside iCloud Drive).
+    Validates the chosen path against the allowlist, stores it server-side,
+    and returns a single-use token. The path never travels back over HTTP.
+    """
+    icloud = Path.home() / "Library" / "Mobile Documents" / "com~apple~CloudDocs"
+    default = str(icloud) if icloud.exists() else str(Path.home())
+    result = subprocess.run(
+        ["osascript", "-e",
+         f'POSIX path of (choose folder with prompt "Select folder in iCloud Drive"'
+         f' default location POSIX file "{default}")'],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return {"token": None}  # user cancelled
+
+    chosen = Path(result.stdout.strip()).resolve()
+    allowed = [p.resolve() for p in _allowed_export_dirs()]
+    if not any(chosen == a or chosen.is_relative_to(a) for a in allowed):
+        raise HTTPException(status_code=400, detail="Chosen folder is outside allowed locations")
+
+    token = str(uuid.uuid4())
+    _pending_exports[token] = chosen
+    return {"token": token}
+
+
+@app.get("/api/export/to-downloads", response_model=ExportResult)
+def export_to_downloads() -> ExportResult:
+    """Export directly to ~/Downloads — no user-supplied path."""
+    downloads = Path.home() / "Downloads"
+    if not downloads.exists():
+        raise HTTPException(status_code=400, detail="Downloads folder not found")
+    return _run_export(downloads)
+
+
+@app.get("/api/export", response_model=ExportResult)
+def export_html(token: str) -> ExportResult:
+    """
+    Run the export using a path stored server-side by pick_directory.
+    Consumes the token on first use.
+    """
+    output_dir = _pending_exports.pop(token, None)
+    if output_dir is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired export token")
+    return _run_export(output_dir)
 
 
 # Serve contact photos

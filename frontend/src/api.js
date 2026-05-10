@@ -48,19 +48,26 @@ export async function getExportDestinations() {
   if (isStatic) throw new Error('Not available in static export mode')
   const res = await fetch('/api/export/destinations')
   if (!res.ok) throw new Error('Failed to fetch export destinations')
-  return res.json()  // { downloads: string|null, icloud: string|null }
+  return res.json()  // { downloads: bool, icloud: bool }
 }
 
 export async function pickExportDirectory() {
   if (isStatic) throw new Error('Not available in static export mode')
   const res = await fetch('/api/export/pick-directory')
   if (!res.ok) throw new Error('Failed to open folder picker')
-  return res.json()  // { path: string | null }
+  return res.json()  // { token: string | null }
 }
 
-export async function exportHtml(outputDir) {
+export async function exportToDownloads() {
   if (isStatic) throw new Error('Not available in static export mode')
-  const res = await fetch(`/api/export?output_dir=${encodeURIComponent(outputDir)}`)
+  const res = await fetch('/api/export/to-downloads')
+  if (!res.ok) throw new Error('Export failed')
+  return res.json()  // ExportResult
+}
+
+export async function exportHtml(token) {
+  if (isStatic) throw new Error('Not available in static export mode')
+  const res = await fetch(`/api/export?token=${encodeURIComponent(token)}`)
   if (!res.ok) throw new Error('Export failed')
   return res.json()  // ExportResult
 }
