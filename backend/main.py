@@ -131,12 +131,48 @@ def get_unresolved() -> list[UnresolvedRelation]:
     return [UnresolvedRelation(**r) for r in _unresolved]
 
 
+def _allowed_export_dirs() -> list[Path]:
+    home = Path.home()
+    candidates = [
+        home / "Downloads",
+        home / "Library" / "Mobile Documents" / "com~apple~CloudDocs",
+    ]
+    return [p for p in candidates if p.exists()]
+
+
+def _validate_export_dir(output_dir: str) -> Path:
+    """Resolve path and assert it sits inside an allowed base directory."""
+    resolved = Path(output_dir).resolve()
+    allowed = [p.resolve() for p in _allowed_export_dirs()]
+    if not any(resolved == a or resolved.is_relative_to(a) for a in allowed):
+        raise HTTPException(
+            status_code=400,
+            detail="Output directory must be within Downloads or iCloud Drive",
+        )
+    return resolved
+
+
+@app.get("/api/export/destinations")
+def get_export_destinations() -> dict:
+    """Return available export destination paths on this machine."""
+    home = Path.home()
+    downloads = home / "Downloads"
+    icloud = home / "Library" / "Mobile Documents" / "com~apple~CloudDocs"
+    return {
+        "downloads": str(downloads) if downloads.exists() else None,
+        "icloud": str(icloud) if icloud.exists() else None,
+    }
+
+
 @app.get("/api/export/pick-directory")
 def pick_directory() -> dict:
-    """Show the native macOS folder picker and return the chosen path, or null if cancelled."""
+    """Show the native macOS folder picker starting in iCloud Drive, return chosen path or null."""
+    icloud = Path.home() / "Library" / "Mobile Documents" / "com~apple~CloudDocs"
+    default = str(icloud) if icloud.exists() else str(Path.home())
     result = subprocess.run(
         ["osascript", "-e",
-         'POSIX path of (choose folder with prompt "Select export destination")'],
+         f'POSIX path of (choose folder with prompt "Select folder in iCloud Drive"'
+         f' default location POSIX file "{default}")'],
         capture_output=True,
         text=True,
     )
@@ -150,7 +186,8 @@ def export_html(output_dir: str) -> ExportResult:
     """Build and write a self-contained HTML export to the given directory."""
     from exporter import build_app_data, embed_photos, build_frontend, inline_assets
 
-    output_path = Path(output_dir) / "contacts-overview.html"
+    resolved_dir = _validate_export_dir(output_dir)
+    output_path = resolved_dir / "contacts-overview.html"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     app_data = build_app_data(_contacts, ENRICHMENT_FILE)

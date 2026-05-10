@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { getAllContacts, getContactsMap, getGroups, getSettings, syncContacts, pickExportDirectory, exportHtml, IS_STATIC } from './api'
+import { getAllContacts, getContactsMap, getGroups, getSettings, syncContacts, getExportDestinations, pickExportDirectory, exportHtml, IS_STATIC } from './api'
 import GroupSidebar from './components/GroupSidebar'
 import FamilyTreePanel from './components/FamilyTreePanel'
 import FamilyNavigator from './components/FamilyNavigator'
@@ -8,6 +8,7 @@ import ContactDrawer from './components/ContactDrawer'
 import ZoomControls from './components/ZoomControls'
 import LandscapeGuard from './components/LandscapeGuard'
 import Notification from './components/Notification'
+import ExportPicker from './components/ExportPicker'
 
 const ZOOM_STEP = 0.15
 const ZOOM_MIN = 0.15
@@ -21,7 +22,9 @@ export default function App() {
   const [selectedUid, setSelectedUid] = useState(null)
   const [syncing, setSyncing] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [notification, setNotification] = useState(null)  // { type, title, details }
+  const [notification, setNotification] = useState(null)       // { type, title, details }
+  const [exportPickerOpen, setExportPickerOpen] = useState(false)
+  const [exportDestinations, setExportDestinations] = useState(null)
   const [loading, setLoading] = useState(true)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => window.innerWidth < 1024
@@ -190,11 +193,20 @@ export default function App() {
   }
 
   const handleExport = async () => {
+    try {
+      const dests = await getExportDestinations()
+      setExportDestinations(dests)
+      setExportPickerOpen(true)
+    } catch (e) {
+      setNotification({ type: 'error', title: 'Export failed', details: e.message })
+    }
+  }
+
+  const runExport = async (outputDir) => {
+    setExportPickerOpen(false)
     setExporting(true)
     try {
-      const { path } = await pickExportDirectory()
-      if (!path) return  // user cancelled
-      const result = await exportHtml(path)
+      const result = await exportHtml(outputDir)
       setNotification({
         type: 'success',
         title: 'Export complete',
@@ -205,6 +217,15 @@ export default function App() {
     } finally {
       setExporting(false)
     }
+  }
+
+  const handlePickDownloads = () => runExport(exportDestinations.downloads)
+
+  const handlePickICloud = async () => {
+    setExportPickerOpen(false)
+    const { path } = await pickExportDirectory()
+    if (!path) return  // user cancelled
+    runExport(path)
   }
 
   const handleSelectContact = (uid) => setSelectedUid(uid)
@@ -324,6 +345,16 @@ export default function App() {
             contacts={contacts}
             onClose={handleCloseDrawer}
             onSelectContact={handleSelectContact}
+          />
+        )}
+
+        {/* Export destination picker */}
+        {exportPickerOpen && exportDestinations && (
+          <ExportPicker
+            destinations={exportDestinations}
+            onPickDownloads={handlePickDownloads}
+            onPickICloud={handlePickICloud}
+            onCancel={() => setExportPickerOpen(false)}
           />
         )}
 

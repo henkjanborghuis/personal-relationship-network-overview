@@ -248,8 +248,9 @@ The backend exposes a small REST API (useful for debugging):
 | `GET /api/contacts/{uid}` | Single contact by UID |
 | `GET /api/settings` | App settings (e.g. `default_group`) |
 | `GET /api/diagnostics/unresolved` | Relationships that couldn't be auto-resolved |
-| `GET /api/export/pick-directory` | Open native macOS folder picker, return chosen path |
-| `GET /api/export?output_dir=...` | Build and write self-contained HTML export to directory |
+| `GET /api/export/destinations` | Return available export destinations (Downloads, iCloud Drive) |
+| `GET /api/export/pick-directory` | Open native macOS folder picker inside iCloud Drive, return chosen path |
+| `GET /api/export?output_dir=...` | Build and write self-contained HTML export (path must be within Downloads or iCloud Drive) |
 | `GET /api/docs` | Interactive API docs (Swagger UI) |
 
 ---
@@ -289,6 +290,7 @@ The backend exposes a small REST API (useful for debugging):
     │       ├── InitialsCircle.jsx
     │       ├── ZoomControls.jsx
     │       ├── LandscapeGuard.jsx
-    │       └── Notification.jsx
+    │       ├── Notification.jsx
+    │       └── ExportPicker.jsx
     └── dist/               # built frontend (auto-generated)
 ```
