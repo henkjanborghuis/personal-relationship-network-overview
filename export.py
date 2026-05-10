@@ -201,7 +201,7 @@ def main():
     else:
         from sync import sync_all
         logger.info("Syncing from Apple Contacts...")
-        vcf_text, groups_data = sync_all()
+        vcf_text, groups_data, _ = sync_all()
         # Persist for future --skip-sync runs
         groups_path = BACKEND / "data" / "groups.json"
         groups_path.parent.mkdir(exist_ok=True)
