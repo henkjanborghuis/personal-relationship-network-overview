@@ -288,6 +288,7 @@ The backend exposes a small REST API (useful for debugging):
     │       ├── ContactDrawer.jsx
     │       ├── InitialsCircle.jsx
     │       ├── ZoomControls.jsx
-    │       └── LandscapeGuard.jsx
+    │       ├── LandscapeGuard.jsx
+    │       └── Notification.jsx
     └── dist/               # built frontend (auto-generated)
 ```

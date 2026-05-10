@@ -7,6 +7,7 @@ import InitialsCircle from './components/InitialsCircle'
 import ContactDrawer from './components/ContactDrawer'
 import ZoomControls from './components/ZoomControls'
 import LandscapeGuard from './components/LandscapeGuard'
+import Notification from './components/Notification'
 
 const ZOOM_STEP = 0.15
 const ZOOM_MIN = 0.15
@@ -19,9 +20,8 @@ export default function App() {
   const [selectedGroup, setSelectedGroup] = useState(null)
   const [selectedUid, setSelectedUid] = useState(null)
   const [syncing, setSyncing] = useState(false)
-  const [syncMsg, setSyncMsg] = useState(null)
   const [exporting, setExporting] = useState(false)
-  const [exportMsg, setExportMsg] = useState(null)
+  const [notification, setNotification] = useState(null)  // { type, title, details }
   const [loading, setLoading] = useState(true)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => window.innerWidth < 1024
@@ -174,13 +174,16 @@ export default function App() {
 
   const handleSync = async () => {
     setSyncing(true)
-    setSyncMsg(null)
     try {
       const result = await syncContacts()
-      setSyncMsg(`Synced ${result.contacts_count} contacts across ${result.groups_count} groups.`)
       await loadData()
+      setNotification({
+        type: 'success',
+        title: 'Sync complete',
+        details: `${result.contacts_count} contacts across ${result.groups_count} groups.`,
+      })
     } catch (e) {
-      setSyncMsg(`Sync failed: ${e.message}`)
+      setNotification({ type: 'error', title: 'Sync failed', details: e.message })
     } finally {
       setSyncing(false)
     }
@@ -188,14 +191,17 @@ export default function App() {
 
   const handleExport = async () => {
     setExporting(true)
-    setExportMsg(null)
     try {
       const { path } = await pickExportDirectory()
       if (!path) return  // user cancelled
       const result = await exportHtml(path)
-      setExportMsg(`Exported ${result.contacts_count} contacts → ${result.output_path} (${result.size_kb} KB)`)
+      setNotification({
+        type: 'success',
+        title: 'Export complete',
+        details: `${result.contacts_count} contacts saved to ${result.output_path} (${result.size_kb} KB)`,
+      })
     } catch (e) {
-      setExportMsg(`Export failed: ${e.message}`)
+      setNotification({ type: 'error', title: 'Export failed', details: e.message })
     } finally {
       setExporting(false)
     }
@@ -226,8 +232,6 @@ export default function App() {
           syncing={syncing}
           onExport={handleExport}
           exporting={exporting}
-          exportMsg={exportMsg}
-          onClearExportMsg={() => setExportMsg(null)}
           isStatic={IS_STATIC}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(v => !v)}
@@ -236,14 +240,6 @@ export default function App() {
         />
 
         <main className="flex-1 overflow-hidden flex flex-col">
-          {/* Sync message banner */}
-          {syncMsg && (
-            <div className="shrink-0 bg-green-50 dark:bg-green-900/30 border-b border-green-100 dark:border-green-800 px-6 py-2 text-sm text-green-700 dark:text-green-400 flex items-center justify-between">
-              <span>{syncMsg}</span>
-              <button onClick={() => setSyncMsg(null)} className="text-green-400 hover:text-green-600 ml-4">×</button>
-            </div>
-          )}
-
           {/* Header: group selector dropdown */}
           <div className="shrink-0 px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800">
             <div className="relative inline-flex items-center gap-1">
@@ -328,6 +324,16 @@ export default function App() {
             contacts={contacts}
             onClose={handleCloseDrawer}
             onSelectContact={handleSelectContact}
+          />
+        )}
+
+        {/* Notification overlay */}
+        {notification && (
+          <Notification
+            type={notification.type}
+            title={notification.title}
+            details={notification.details}
+            onClose={() => setNotification(null)}
           />
         )}
       </div>
