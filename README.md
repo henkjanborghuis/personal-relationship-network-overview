@@ -15,7 +15,7 @@ A personal relationship management web app that uses **Apple Contacts** as its s
 - Dark mode (follows system preference, with manual toggle)
 - Collapsible sidebar (collapsed by default on mobile/tablet)
 - Accessible on your home network from any device
-- Static HTML export for offline / on-the-go use (e.g. iCloud Drive)
+- Static HTML export via sidebar button (opens native folder picker) or CLI script
 
 ---
 
@@ -108,6 +108,10 @@ Matching is done by full name (case-insensitive). If a name in Apple Photos does
 ## Static HTML export
 
 Generates a single self-contained HTML file that works without a running server.
+
+**From the app:** Click **Export to HTML** in the sidebar. A native macOS folder picker opens — select a destination and the file is built and saved there. Uses the contacts already synced into the running app (no re-sync needed).
+
+**From the command line:**
 
 ```bash
 python3 export.py
@@ -244,6 +248,10 @@ The backend exposes a small REST API (useful for debugging):
 | `GET /api/contacts/{uid}` | Single contact by UID |
 | `GET /api/settings` | App settings (e.g. `default_group`) |
 | `GET /api/diagnostics/unresolved` | Relationships that couldn't be auto-resolved |
+| `GET /api/export/destinations` | Return which export destinations exist on this machine |
+| `GET /api/export/pick-directory` | Open native macOS folder picker, validate server-side, return single-use token |
+| `GET /api/export/to-downloads` | Export directly to ~/Downloads (no user-supplied path) |
+| `GET /api/export?token=...` | Run export using path stored server-side by pick-directory |
 | `GET /api/docs` | Interactive API docs (Swagger UI) |
 
 ---
@@ -262,6 +270,7 @@ The backend exposes a small REST API (useful for debugging):
 │   ├── parser.py           # vCard parsing + relationship resolution
 │   ├── grouper.py          # Family tree builder
 │   ├── enrichment.py       # enrichment.yaml loader
+│   ├── exporter.py         # HTML export helpers (shared by export.py and API)
 │   ├── requirements.txt    # Python dependencies
 │   └── data/
 │       ├── enrichment.yaml.sample  # ← template — copy to enrichment.yaml
@@ -281,6 +290,8 @@ The backend exposes a small REST API (useful for debugging):
     │       ├── ContactDrawer.jsx
     │       ├── InitialsCircle.jsx
     │       ├── ZoomControls.jsx
-    │       └── LandscapeGuard.jsx
+    │       ├── LandscapeGuard.jsx
+    │       ├── Notification.jsx
+    │       └── ExportPicker.jsx
     └── dist/               # built frontend (auto-generated)
 ```

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { getAllContacts, getContactsMap, getGroups, getSettings, syncContacts, IS_STATIC } from './api'
+import { getAllContacts, getContactsMap, getGroups, getSettings, syncContacts, getExportDestinations, pickExportDirectory, exportToDownloads, exportHtml, IS_STATIC } from './api'
 import GroupSidebar from './components/GroupSidebar'
 import FamilyTreePanel from './components/FamilyTreePanel'
 import FamilyNavigator from './components/FamilyNavigator'
@@ -7,6 +7,8 @@ import InitialsCircle from './components/InitialsCircle'
 import ContactDrawer from './components/ContactDrawer'
 import ZoomControls from './components/ZoomControls'
 import LandscapeGuard from './components/LandscapeGuard'
+import Notification from './components/Notification'
+import ExportPicker from './components/ExportPicker'
 
 const ZOOM_STEP = 0.15
 const ZOOM_MIN = 0.15
@@ -19,7 +21,10 @@ export default function App() {
   const [selectedGroup, setSelectedGroup] = useState(null)
   const [selectedUid, setSelectedUid] = useState(null)
   const [syncing, setSyncing] = useState(false)
-  const [syncMsg, setSyncMsg] = useState(null)
+  const [exporting, setExporting] = useState(false)
+  const [notification, setNotification] = useState(null)       // { type, title, details }
+  const [exportPickerOpen, setExportPickerOpen] = useState(false)
+  const [exportDestinations, setExportDestinations] = useState(null)
   const [loading, setLoading] = useState(true)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => window.innerWidth < 1024
@@ -172,16 +177,70 @@ export default function App() {
 
   const handleSync = async () => {
     setSyncing(true)
-    setSyncMsg(null)
     try {
       const result = await syncContacts()
-      setSyncMsg(`Synced ${result.contacts_count} contacts across ${result.groups_count} groups.`)
       await loadData()
+      setNotification({
+        type: 'success',
+        title: 'Sync complete',
+        details: `${result.contacts_count} contacts across ${result.groups_count} groups.`,
+      })
     } catch (e) {
-      setSyncMsg(`Sync failed: ${e.message}`)
+      setNotification({ type: 'error', title: 'Sync failed', details: e.message })
     } finally {
       setSyncing(false)
     }
+  }
+
+  const handleExport = async () => {
+    try {
+      const dests = await getExportDestinations()
+      setExportDestinations(dests)
+      setExportPickerOpen(true)
+    } catch (e) {
+      setNotification({ type: 'error', title: 'Export failed', details: e.message })
+    }
+  }
+
+  const runExport = async (token) => {
+    setExportPickerOpen(false)
+    setExporting(true)
+    try {
+      const result = await exportHtml(token)
+      setNotification({
+        type: 'success',
+        title: 'Export complete',
+        details: `${result.contacts_count} contacts saved to ${result.output_path} (${result.size_kb} KB)`,
+      })
+    } catch (e) {
+      setNotification({ type: 'error', title: 'Export failed', details: e.message })
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handlePickDownloads = async () => {
+    setExportPickerOpen(false)
+    setExporting(true)
+    try {
+      const result = await exportToDownloads()
+      setNotification({
+        type: 'success',
+        title: 'Export complete',
+        details: `${result.contacts_count} contacts saved to ${result.output_path} (${result.size_kb} KB)`,
+      })
+    } catch (e) {
+      setNotification({ type: 'error', title: 'Export failed', details: e.message })
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handlePickICloud = async () => {
+    setExportPickerOpen(false)
+    const { token } = await pickExportDirectory()
+    if (!token) return  // user cancelled
+    runExport(token)
   }
 
   const handleSelectContact = (uid) => setSelectedUid(uid)
@@ -207,6 +266,8 @@ export default function App() {
           onSelectGroup={handleSelectGroup}
           onSync={handleSync}
           syncing={syncing}
+          onExport={handleExport}
+          exporting={exporting}
           isStatic={IS_STATIC}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(v => !v)}
@@ -215,14 +276,6 @@ export default function App() {
         />
 
         <main className="flex-1 overflow-hidden flex flex-col">
-          {/* Sync message banner */}
-          {syncMsg && (
-            <div className="shrink-0 bg-green-50 dark:bg-green-900/30 border-b border-green-100 dark:border-green-800 px-6 py-2 text-sm text-green-700 dark:text-green-400 flex items-center justify-between">
-              <span>{syncMsg}</span>
-              <button onClick={() => setSyncMsg(null)} className="text-green-400 hover:text-green-600 ml-4">×</button>
-            </div>
-          )}
-
           {/* Header: group selector dropdown */}
           <div className="shrink-0 px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800">
             <div className="relative inline-flex items-center gap-1">
@@ -307,6 +360,34 @@ export default function App() {
             contacts={contacts}
             onClose={handleCloseDrawer}
             onSelectContact={handleSelectContact}
+          />
+        )}
+
+        {/* Export destination picker */}
+        {exportPickerOpen && exportDestinations && (
+          <ExportPicker
+            destinations={exportDestinations}
+            onPickDownloads={handlePickDownloads}
+            onPickICloud={handlePickICloud}
+            onCancel={() => setExportPickerOpen(false)}
+          />
+        )}
+
+        {/* Loading overlay — shown while sync or export is in progress */}
+        {(syncing || exporting) && (
+          <Notification
+            type="loading"
+            title={syncing ? 'Syncing contacts…' : 'Building HTML export…'}
+          />
+        )}
+
+        {/* Result notification overlay */}
+        {notification && (
+          <Notification
+            type={notification.type}
+            title={notification.title}
+            details={notification.details}
+            onClose={() => setNotification(null)}
           />
         )}
       </div>

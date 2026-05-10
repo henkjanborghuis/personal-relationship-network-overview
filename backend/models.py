@@ -67,3 +67,10 @@ class SyncResult(BaseModel):
 
 class AppSettings(BaseModel):
     default_group: Optional[str] = None
+
+
+class ExportResult(BaseModel):
+    output_path: str
+    size_kb: int
+    contacts_count: int
+    groups_count: int
