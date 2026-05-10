@@ -3,6 +3,7 @@
 # Never commit them. Copy enrichment.yaml.sample → enrichment.yaml to get started.
 backend/data/contacts.vcf
 backend/data/groups.json
+backend/data/all_names.json
 backend/data/photos/
 backend/data/enrichment.yaml
 
