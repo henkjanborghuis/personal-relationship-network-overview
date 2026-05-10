@@ -9,13 +9,9 @@ Usage:
     python3 export.py --output ~/iCloud\ Drive/contacts-overview.html
 """
 import argparse
-import base64
 import json
 import logging
-import re
-import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -26,156 +22,8 @@ BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
 OUTPUT_DEFAULT = ROOT / "output" / "contacts-overview.html"
 
-
-def build_app_data(contacts: dict, groups_data: dict, enrichment_path: Path) -> dict:
-    """Build the full data payload that will be embedded in the HTML."""
-    from grouper import build_all_group_views
-    from enrichment import load_default_group
-
-    group_views = build_all_group_views(contacts)
-    default_group = load_default_group(enrichment_path)
-
-    all_group_names: set[str] = set()
-    for c in contacts.values():
-        all_group_names.update(c.groups)
-
-    groups_list = sorted(
-        [
-            {
-                "name": name,
-                "count": sum(1 for c in contacts.values() if name in c.groups),
-            }
-            for name in all_group_names
-        ],
-        key=lambda g: g["name"],
-    )
-
-    return {
-        "contacts": {uid: c.model_dump() for uid, c in contacts.items()},
-        "groups": groups_list,
-        "groupViews": {name: view.model_dump() for name, view in group_views.items()},
-        "settings": {"default_group": default_group},
-    }
-
-
-PHOTO_THUMBNAIL_PX = 120
-
-
-def embed_photos(contacts_data: dict, photos_dir: Path) -> None:
-    """
-    Replace photo_url path strings with base64 data URLs (resized thumbnails).
-    Mutates contacts_data in place.  Uses macOS sips — no extra dependencies.
-    """
-    with_photos = [uid for uid, c in contacts_data.items() if c.get("photo_url")]
-    if not with_photos:
-        return
-
-    logger.info(f"Embedding {len(with_photos)} contact photos as thumbnails…")
-    embedded = 0
-    for uid in with_photos:
-        photo_path = photos_dir / f"{uid}.jpg"
-        if not photo_path.exists():
-            continue
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-            tmp_path = Path(tmp.name)
-        try:
-            subprocess.run(
-                [
-                    "sips",
-                    "--resampleHeightWidthMax", str(PHOTO_THUMBNAIL_PX),
-                    str(photo_path),
-                    "--out", str(tmp_path),
-                ],
-                capture_output=True,
-                check=True,
-            )
-            b64 = base64.b64encode(tmp_path.read_bytes()).decode("ascii")
-            contacts_data[uid]["photo_url"] = f"data:image/jpeg;base64,{b64}"
-            embedded += 1
-        except Exception as exc:
-            logger.warning(f"Could not embed photo for {uid}: {exc}")
-        finally:
-            tmp_path.unlink(missing_ok=True)
-
-    logger.info(f"Embedded {embedded}/{len(with_photos)} photos")
-
-
-def build_frontend() -> Path:
-    logger.info("Building frontend...")
-    result = subprocess.run(
-        ["npm", "run", "build"],
-        cwd=FRONTEND,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print(result.stderr)
-        raise RuntimeError("Frontend build failed")
-    dist = FRONTEND / "dist"
-    logger.info(f"Frontend built → {dist}")
-    return dist
-
-
-def inline_assets(dist: Path, app_data: dict) -> str:
-    """
-    Inline all JS and CSS into index.html and inject the contact data.
-    Produces a single self-contained HTML file.
-    """
-    html = (dist / "index.html").read_text(encoding="utf-8")
-
-    # Inline favicon as base64 data URL so file:// opens don't 404
-    favicon_path = dist / "favicon.svg"
-    if favicon_path.exists():
-        b64 = base64.b64encode(favicon_path.read_bytes()).decode("ascii")
-        html = html.replace(
-            'href="/favicon.svg"',
-            f'href="data:image/svg+xml;base64,{b64}"',
-        )
-
-    # Inline CSS <link rel="stylesheet" href="...">
-    def replace_link(m):
-        href = m.group(1).lstrip("/")
-        css_path = dist / href
-        if css_path.exists():
-            css = css_path.read_text(encoding="utf-8")
-            return f"<style>{css}</style>"
-        return m.group(0)
-
-    html = re.sub(
-        r'<link[^>]+rel="stylesheet"[^>]+href="(/[^"]+)"[^>]*/?>',
-        replace_link,
-        html,
-    )
-
-    # Collect JS from <script src="..."> tags and remove them from <head>.
-    # We inject them before </body> instead so the DOM is ready when they run.
-    # (Plain <script> tags are not deferred like type="module" scripts are.)
-    collected_scripts: list[str] = []
-
-    def replace_script(m):
-        src = m.group(1).lstrip("/")
-        js_path = dist / src
-        if js_path.exists():
-            collected_scripts.append(js_path.read_text(encoding="utf-8"))
-            return ""  # remove from <head>
-        return m.group(0)
-
-    html = re.sub(
-        r'<script\b[^>]*\bsrc="(/[^"]+)"[^>]*></script>',
-        replace_script,
-        html,
-    )
-
-    # Inject contact data before </head>
-    data_json = json.dumps(app_data, ensure_ascii=False, default=str)
-    data_script = f"<script>window.__APP_DATA__={data_json};</script>"
-    html = html.replace("</head>", data_script + "\n</head>", 1)
-
-    # Inject app scripts before </body> — DOM is fully parsed at this point
-    for js in collected_scripts:
-        html = html.replace("</body>", f"<script>{js}</script>\n</body>", 1)
-
-    return html
+sys.path.insert(0, str(BACKEND))
+from exporter import build_app_data, embed_photos, build_frontend, inline_assets  # noqa: E402
 
 
 def main():
@@ -183,8 +31,6 @@ def main():
     parser.add_argument("--output", type=Path, default=OUTPUT_DEFAULT, help="Output path")
     parser.add_argument("--skip-sync", action="store_true", help="Use cached contacts.vcf instead of re-syncing")
     args = parser.parse_args()
-
-    sys.path.insert(0, str(BACKEND))
 
     from enrichment import apply_enrichment
     from parser import parse_contacts
@@ -216,10 +62,10 @@ def main():
             "Run the local server and visit /api/diagnostics/unresolved for details."
         )
 
-    app_data = build_app_data(contacts, groups_data, BACKEND / "data" / "enrichment.yaml")
+    app_data = build_app_data(contacts, BACKEND / "data" / "enrichment.yaml")
     embed_photos(app_data["contacts"], BACKEND / "data" / "photos")
 
-    dist = build_frontend()
+    dist = build_frontend(FRONTEND)
     html = inline_assets(dist, app_data)
 
     output: Path = args.output

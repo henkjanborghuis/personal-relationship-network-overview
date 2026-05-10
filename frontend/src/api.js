@@ -44,6 +44,20 @@ export async function syncContacts() {
   return res.json()
 }
 
+export async function pickExportDirectory() {
+  if (isStatic) throw new Error('Not available in static export mode')
+  const res = await fetch('/api/export/pick-directory')
+  if (!res.ok) throw new Error('Failed to open folder picker')
+  return res.json()  // { path: string | null }
+}
+
+export async function exportHtml(outputDir) {
+  if (isStatic) throw new Error('Not available in static export mode')
+  const res = await fetch(`/api/export?output_dir=${encodeURIComponent(outputDir)}`)
+  if (!res.ok) throw new Error('Export failed')
+  return res.json()  // ExportResult
+}
+
 export async function getSettings() {
   if (isStatic) return staticData().settings ?? {}
   const res = await fetch('/api/settings')

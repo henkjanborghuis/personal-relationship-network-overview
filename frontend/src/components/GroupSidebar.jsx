@@ -1,4 +1,4 @@
-export default function GroupSidebar({ groups, selectedGroup, onSelectGroup, onSync, syncing, isStatic, collapsed, onToggleCollapse, isDark, onToggleDark }) {
+export default function GroupSidebar({ groups, selectedGroup, onSelectGroup, onSync, syncing, onExport, exporting, exportMsg, onClearExportMsg, isStatic, collapsed, onToggleCollapse, isDark, onToggleDark }) {
   return (
     <aside
       className={[
@@ -94,6 +94,25 @@ export default function GroupSidebar({ groups, selectedGroup, onSelectGroup, onS
           >
             {syncing ? 'Syncing…' : 'Sync Contacts'}
           </button>
+        )}
+
+        {/* Export button — expanded only */}
+        {!isStatic && !collapsed && (
+          <button
+            onClick={onExport}
+            disabled={exporting}
+            className="w-full py-2 px-3 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 transition-colors"
+          >
+            {exporting ? 'Exporting…' : 'Export to HTML'}
+          </button>
+        )}
+
+        {/* Export result message */}
+        {!collapsed && exportMsg && (
+          <div className="flex items-start justify-between gap-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 break-all">{exportMsg}</p>
+            <button onClick={onClearExportMsg} className="text-gray-300 dark:text-gray-600 hover:text-gray-500 shrink-0 leading-none">×</button>
+          </div>
         )}
       </div>
     </aside>

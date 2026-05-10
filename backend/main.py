@@ -2,6 +2,7 @@
 FastAPI backend for the personal contacts overview app.
 """
 import logging
+import subprocess
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -11,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from enrichment import apply_enrichment, load_default_group, load_group_siblings
 from grouper import build_group_view, build_all_group_views
-from models import AppSettings, Contact, GroupSummary, GroupView, SyncResult, UnresolvedRelation
+from models import AppSettings, Contact, ExportResult, GroupSummary, GroupView, SyncResult, UnresolvedRelation
 from parser import parse_contacts
 from sync import sync_all
 
@@ -33,6 +34,7 @@ _unresolved: list[dict] = []
 
 DATA_DIR = Path(__file__).parent / "data"
 ENRICHMENT_FILE = DATA_DIR / "enrichment.yaml"
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
 
 def _load_contacts() -> None:
@@ -127,6 +129,43 @@ def get_settings() -> AppSettings:
 def get_unresolved() -> list[UnresolvedRelation]:
     """Returns relationships that couldn't be auto-resolved (add to enrichment.yaml)."""
     return [UnresolvedRelation(**r) for r in _unresolved]
+
+
+@app.get("/api/export/pick-directory")
+def pick_directory() -> dict:
+    """Show the native macOS folder picker and return the chosen path, or null if cancelled."""
+    result = subprocess.run(
+        ["osascript", "-e",
+         'POSIX path of (choose folder with prompt "Select export destination")'],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return {"path": result.stdout.strip()}
+    return {"path": None}  # user cancelled
+
+
+@app.get("/api/export", response_model=ExportResult)
+def export_html(output_dir: str) -> ExportResult:
+    """Build and write a self-contained HTML export to the given directory."""
+    from exporter import build_app_data, embed_photos, build_frontend, inline_assets
+
+    output_path = Path(output_dir) / "contacts-overview.html"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    app_data = build_app_data(_contacts, ENRICHMENT_FILE)
+    embed_photos(app_data["contacts"], DATA_DIR / "photos")
+
+    dist = build_frontend(FRONTEND_DIR)
+    html = inline_assets(dist, app_data)
+    output_path.write_text(html, encoding="utf-8")
+
+    return ExportResult(
+        output_path=str(output_path),
+        size_kb=output_path.stat().st_size // 1024,
+        contacts_count=len(_contacts),
+        groups_count=len(app_data["groups"]),
+    )
 
 
 # Serve contact photos

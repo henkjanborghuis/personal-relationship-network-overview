@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { getAllContacts, getContactsMap, getGroups, getSettings, syncContacts, IS_STATIC } from './api'
+import { getAllContacts, getContactsMap, getGroups, getSettings, syncContacts, pickExportDirectory, exportHtml, IS_STATIC } from './api'
 import GroupSidebar from './components/GroupSidebar'
 import FamilyTreePanel from './components/FamilyTreePanel'
 import FamilyNavigator from './components/FamilyNavigator'
@@ -20,6 +20,8 @@ export default function App() {
   const [selectedUid, setSelectedUid] = useState(null)
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportMsg, setExportMsg] = useState(null)
   const [loading, setLoading] = useState(true)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => window.innerWidth < 1024
@@ -184,6 +186,21 @@ export default function App() {
     }
   }
 
+  const handleExport = async () => {
+    setExporting(true)
+    setExportMsg(null)
+    try {
+      const { path } = await pickExportDirectory()
+      if (!path) return  // user cancelled
+      const result = await exportHtml(path)
+      setExportMsg(`Exported ${result.contacts_count} contacts → ${result.output_path} (${result.size_kb} KB)`)
+    } catch (e) {
+      setExportMsg(`Export failed: ${e.message}`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const handleSelectContact = (uid) => setSelectedUid(uid)
   const handleCloseDrawer = () => setSelectedUid(null)
   const handleSelectGroup = (name) => setSelectedGroup(name)
@@ -207,6 +224,10 @@ export default function App() {
           onSelectGroup={handleSelectGroup}
           onSync={handleSync}
           syncing={syncing}
+          onExport={handleExport}
+          exporting={exporting}
+          exportMsg={exportMsg}
+          onClearExportMsg={() => setExportMsg(null)}
           isStatic={IS_STATIC}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(v => !v)}
