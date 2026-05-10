@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react'
 /**
  * Centered modal overlay for loading, success, and error states.
  *
- * type='loading' — spinner + message, no dismiss, non-interactive backdrop
- * type='success' — green header, auto-dismisses after 5 s, backdrop click to dismiss
- * type='error'   — red header, stays until dismissed
+ * type='loading' — spinner + elapsed timer, non-interactive backdrop
+ * type='success' — green header, dismissed by OK button or backdrop click
+ * type='error'   — red header, dismissed by OK button or backdrop click
  */
 function formatElapsed(seconds) {
   const m = Math.floor(seconds / 60)
@@ -24,12 +24,6 @@ export default function Notification({ type, title, details, onClose }) {
     }
   }, [type])
 
-  useEffect(() => {
-    if (type === 'success') {
-      const t = setTimeout(onClose, 5000)
-      return () => clearTimeout(t)
-    }
-  }, [type, onClose])
 
   const isLoading = type === 'loading'
   const isSuccess = type === 'success'
@@ -76,10 +70,20 @@ export default function Notification({ type, title, details, onClose }) {
 
             {/* Details */}
             {details && (
-              <div className="px-4 py-3">
+              <div className="px-4 pt-3 pb-1">
                 <p className="text-sm text-gray-600 dark:text-gray-400 break-all">{details}</p>
               </div>
             )}
+
+            {/* OK button */}
+            <div className="px-4 py-3 flex justify-end">
+              <button
+                onClick={onClose}
+                className="px-4 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+              >
+                OK
+              </button>
+            </div>
           </>
         )}
       </div>
