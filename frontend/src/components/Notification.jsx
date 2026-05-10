@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 /**
  * Centered modal overlay for loading, success, and error states.
@@ -7,7 +7,23 @@ import { useEffect } from 'react'
  * type='success' — green header, auto-dismisses after 5 s, backdrop click to dismiss
  * type='error'   — red header, stays until dismissed
  */
+function formatElapsed(seconds) {
+  const m = Math.floor(seconds / 60)
+  const s = String(seconds % 60).padStart(2, '0')
+  return `${m}:${s}`
+}
+
 export default function Notification({ type, title, details, onClose }) {
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    if (type === 'loading') {
+      setElapsed(0)
+      const t = setInterval(() => setElapsed(s => s + 1), 1000)
+      return () => clearInterval(t)
+    }
+  }, [type])
+
   useEffect(() => {
     if (type === 'success') {
       const t = setTimeout(onClose, 5000)
@@ -34,6 +50,7 @@ export default function Notification({ type, title, details, onClose }) {
           <div className="px-6 py-6 flex flex-col items-center gap-4">
             <div className="w-8 h-8 rounded-full border-2 border-gray-200 dark:border-gray-600 border-t-blue-500 dark:border-t-blue-400 animate-spin" />
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 text-center">{title}</p>
+            <p className="text-xs tabular-nums text-gray-400 dark:text-gray-500">{formatElapsed(elapsed)}</p>
           </div>
         ) : (
           <>
