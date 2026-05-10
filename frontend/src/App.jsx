@@ -327,7 +327,15 @@ export default function App() {
           />
         )}
 
-        {/* Notification overlay */}
+        {/* Loading overlay — shown while sync or export is in progress */}
+        {(syncing || exporting) && (
+          <Notification
+            type="loading"
+            title={syncing ? 'Syncing contacts…' : 'Building HTML export…'}
+          />
+        )}
+
+        {/* Result notification overlay */}
         {notification && (
           <Notification
             type={notification.type}
