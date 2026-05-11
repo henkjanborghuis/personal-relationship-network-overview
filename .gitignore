@@ -38,3 +38,4 @@ venv/
 
 # ── Test / dev tooling ───────────────────────────────────────────────────────
 .playwright-mcp/
+.claude/worktrees/
