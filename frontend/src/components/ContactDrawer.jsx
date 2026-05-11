@@ -1,4 +1,16 @@
-import InitialsCircle from './InitialsCircle'
+const HERO_COLORS = [
+  '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+  '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
+  '#06B6D4', '#A855F7',
+]
+
+function colorFromName(name) {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return HERO_COLORS[Math.abs(hash) % HERO_COLORS.length]
+}
 
 function formatDate(isoDate) {
   if (!isoDate) return null
@@ -38,7 +50,7 @@ function Section({ title, children }) {
   )
 }
 
-export default function ContactDrawer({ contact, contacts, onClose, onSelectContact }) {
+export default function ContactDrawer({ contact, contacts, onClose, onSelectContact, inChartView = false }) {
   if (!contact) return null
 
   const spouse = contact.spouse_uid ? contacts[contact.spouse_uid] : null
@@ -50,6 +62,7 @@ export default function ContactDrawer({ contact, contacts, onClose, onSelectCont
   const isDeceased = !!contact.death_date
   const deathDateKnown = contact.death_date && contact.death_date !== '0001-01-01'
   const deathFormatted = deathDateKnown ? formatDate(contact.death_date) : null
+  const heroBg = colorFromName(contact.display_name)
 
   return (
     <>
@@ -60,31 +73,49 @@ export default function ContactDrawer({ contact, contacts, onClose, onSelectCont
       />
 
       {/* Drawer panel */}
-      <aside className="fixed right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 shadow-2xl z-50 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-          <InitialsCircle contact={contact} size="lg" />
-          <div className="flex-1 min-w-0">
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base leading-tight">
-              {contact.display_name}
-              {isDeceased && <span className="text-gray-400 dark:text-gray-500 ml-1">†</span>}
-              {!isDeceased && bdayAge !== null && <span className="text-gray-400 dark:text-gray-500 ml-1 font-normal text-sm">({bdayAge})</span>}
-            </h2>
-            {contact.emails[0] && (
-              <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">{contact.emails[0]}</p>
-            )}
-          </div>
+      <aside
+        className="fixed right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 shadow-2xl z-50 flex flex-col overflow-hidden"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
+        {/* Hero photo + name */}
+        <div className="shrink-0 relative px-5 pt-5 pb-4">
           <button
             onClick={onClose}
-            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 shrink-0 text-xl leading-none"
+            className="absolute top-2 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-500 dark:text-gray-300 hover:bg-black/10 dark:hover:bg-white/20 text-xl leading-none z-10"
             aria-label="Close"
           >
             ×
           </button>
+          <div className="mx-auto" style={{ width: '60%', aspectRatio: '1' }}>
+            {contact.photo_url ? (
+              <img
+                src={contact.photo_url}
+                alt={contact.display_name}
+                className="w-full h-full rounded-2xl object-cover shadow-md select-none"
+              />
+            ) : (
+              <div
+                className="w-full h-full rounded-2xl flex items-center justify-center font-semibold text-white text-5xl shadow-md select-none"
+                style={{ backgroundColor: heroBg }}
+              >
+                {contact.initials}
+              </div>
+            )}
+          </div>
+          <div className="text-center mt-3">
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-lg leading-tight">
+              {contact.display_name}
+              {isDeceased && <span className="text-gray-400 dark:text-gray-500 ml-1">†</span>}
+              {!isDeceased && bdayAge !== null && <span className="text-gray-400 dark:text-gray-500 ml-1 font-normal text-sm">({bdayAge})</span>}
+            </h2>
+            {!inChartView && contact.emails[0] && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">{contact.emails[0]}</p>
+            )}
+          </div>
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex-1 overflow-y-auto px-5 py-4 border-t border-gray-100 dark:border-gray-800">
 
           {/* Birthday, Anniversary & Death */}
           {(bday || anniv || isDeceased) && (
@@ -111,7 +142,7 @@ export default function ContactDrawer({ contact, contacts, onClose, onSelectCont
           )}
 
           {/* Family */}
-          {(spouse || children.length > 0 || parents.length > 0) && (
+          {!inChartView && (spouse || children.length > 0 || parents.length > 0) && (
             <Section title="Family">
               {spouse && (
                 <div className="flex items-center gap-2 mb-2">
@@ -197,7 +228,7 @@ export default function ContactDrawer({ contact, contacts, onClose, onSelectCont
           )}
 
           {/* Contact details */}
-          {contact.phone_numbers?.length > 0 && (
+          {!inChartView && contact.phone_numbers?.length > 0 && (
             <Section title="Phone">
               {contact.phone_numbers.map((p, i) => (
                 <p key={i} className="text-sm text-gray-700 dark:text-gray-300">{p}</p>
@@ -205,7 +236,7 @@ export default function ContactDrawer({ contact, contacts, onClose, onSelectCont
             </Section>
           )}
 
-          {contact.emails?.length > 0 && (
+          {!inChartView && contact.emails?.length > 0 && (
             <Section title="Email">
               {contact.emails.map((e, i) => (
                 <p key={i} className="text-sm text-gray-700 dark:text-gray-300 break-all">{e}</p>
