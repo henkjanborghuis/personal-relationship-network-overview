@@ -360,6 +360,7 @@ export default function App() {
             contacts={contacts}
             onClose={handleCloseDrawer}
             onSelectContact={handleSelectContact}
+            inChartView={!!selectedGroup}
           />
         )}
 
